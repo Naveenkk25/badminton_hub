@@ -3,7 +3,7 @@ import { EventStatus, PlayerCategory, UserRole } from "./types";
 // ========================
 // API Configuration
 // ========================
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5182/api/v1";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://badminton-hub-api.onrender.com/api/v1";
 
 // ========================
 // Color Palette — Badminton Themed
