@@ -102,24 +102,44 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityR
             builder.Entity<Registration>()
                 .HasIndex(r => new { r.EventId, r.PlayerId })
                 .IsUnique()
-                .HasFilter("\"IsCancelled\" = false AND \"IsDeleted\" = false");
+                .HasFilter("\"GuestName\" IS NULL AND \"IsCancelled\" = false AND \"IsDeleted\" = false");
+
+            builder.Entity<Registration>()
+                .HasIndex(r => new { r.EventId, r.PlayerId, r.GuestName })
+                .IsUnique()
+                .HasFilter("\"GuestName\" IS NOT NULL AND \"IsCancelled\" = false AND \"IsDeleted\" = false");
 
             builder.Entity<Waitlist>()
                 .HasIndex(w => new { w.EventId, w.PlayerId })
                 .IsUnique()
-                .HasFilter("\"IsCancelled\" = false AND \"IsPromoted\" = false AND \"IsDeleted\" = false");
+                .HasFilter("\"GuestName\" IS NULL AND \"IsCancelled\" = false AND \"IsPromoted\" = false AND \"IsDeleted\" = false");
+
+            builder.Entity<Waitlist>()
+                .HasIndex(w => new { w.EventId, w.PlayerId, w.GuestName })
+                .IsUnique()
+                .HasFilter("\"GuestName\" IS NOT NULL AND \"IsCancelled\" = false AND \"IsPromoted\" = false AND \"IsDeleted\" = false");
         }
         else
         {
             builder.Entity<Registration>()
                 .HasIndex(r => new { r.EventId, r.PlayerId })
                 .IsUnique()
-                .HasFilter("IsCancelled = 0 AND IsDeleted = 0");
+                .HasFilter("GuestName IS NULL AND IsCancelled = 0 AND IsDeleted = 0");
+
+            builder.Entity<Registration>()
+                .HasIndex(r => new { r.EventId, r.PlayerId, r.GuestName })
+                .IsUnique()
+                .HasFilter("GuestName IS NOT NULL AND IsCancelled = 0 AND IsDeleted = 0");
 
             builder.Entity<Waitlist>()
                 .HasIndex(w => new { w.EventId, w.PlayerId })
                 .IsUnique()
-                .HasFilter("IsCancelled = 0 AND IsPromoted = 0 AND IsDeleted = 0");
+                .HasFilter("GuestName IS NULL AND IsCancelled = 0 AND IsPromoted = 0 AND IsDeleted = 0");
+
+            builder.Entity<Waitlist>()
+                .HasIndex(w => new { w.EventId, w.PlayerId, w.GuestName })
+                .IsUnique()
+                .HasFilter("GuestName IS NOT NULL AND IsCancelled = 0 AND IsPromoted = 0 AND IsDeleted = 0");
         }
 
         // Organizer FK

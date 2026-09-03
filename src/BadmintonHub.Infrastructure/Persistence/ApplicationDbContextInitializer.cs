@@ -52,6 +52,35 @@ public class ApplicationDbContextInitializer
                     _logger.LogError(ex, "CreateTablesAsync failed.");
                     throw;
                 }
+
+                // Update unique indexes to allow guest participants (GuestName IS NOT NULL)
+                try
+                {
+                    await _context.Database.ExecuteSqlRawAsync(@"
+                        DROP INDEX IF EXISTS ""IX_Registrations_EventId_PlayerId"";
+                        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Registrations_EventId_PlayerId"" 
+                        ON ""Registrations"" (""EventId"", ""PlayerId"") 
+                        WHERE ""GuestName"" IS NULL AND ""IsCancelled"" = false AND ""IsDeleted"" = false;
+
+                        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Registrations_EventId_PlayerId_GuestName"" 
+                        ON ""Registrations"" (""EventId"", ""PlayerId"", ""GuestName"") 
+                        WHERE ""GuestName"" IS NOT NULL AND ""IsCancelled"" = false AND ""IsDeleted"" = false;
+
+                        DROP INDEX IF EXISTS ""IX_Waitlists_EventId_PlayerId"";
+                        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Waitlists_EventId_PlayerId"" 
+                        ON ""Waitlists"" (""EventId"", ""PlayerId"") 
+                        WHERE ""GuestName"" IS NULL AND ""IsCancelled"" = false AND ""IsPromoted"" = false AND ""IsDeleted"" = false;
+
+                        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Waitlists_EventId_PlayerId_GuestName"" 
+                        ON ""Waitlists"" (""EventId"", ""PlayerId"", ""GuestName"") 
+                        WHERE ""GuestName"" IS NOT NULL AND ""IsCancelled"" = false AND ""IsPromoted"" = false AND ""IsDeleted"" = false;
+                    ");
+                    _logger.LogInformation("Successfully updated Registrations and Waitlists unique indexes for guest participant support.");
+                }
+                catch (Exception indexEx)
+                {
+                    _logger.LogWarning(indexEx, "Could not alter indexes on Registrations/Waitlists.");
+                }
             }
             else if (_context.Database.IsSqlite())
             {
