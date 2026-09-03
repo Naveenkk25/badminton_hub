@@ -24,7 +24,7 @@ import {
 interface EventCardProps {
   event: EventDto;
   userStatus?: { status: string, position: number } | null;
-  onAction?: (event: EventDto, action: "register" | "waitlist" | "edit" | "cancel" | "history" | "settle" | "delete", guestCount?: number) => void;
+  onAction?: (event: EventDto, action: "register" | "waitlist" | "edit" | "cancel" | "history" | "settle" | "delete" | "cancel_event", guestCount?: number) => void;
   onViewDetails?: (event: EventDto) => void;
 }
 
@@ -300,7 +300,7 @@ export function EventCard({ event, userStatus, onAction, onViewDetails }: EventC
                   )}
                   {event.status !== EventStatus.Completed && event.status !== EventStatus.Cancelled && (
                     <DropdownMenuItem 
-                      onClick={() => onAction?.(event, "cancel")}
+                      onClick={() => onAction?.(event, "cancel_event")}
                       className="cursor-pointer text-amber-600 focus:text-amber-600"
                     >
                       <XCircle className="mr-2 h-4 w-4" /> Cancel Event

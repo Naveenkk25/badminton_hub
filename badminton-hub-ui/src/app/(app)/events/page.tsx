@@ -57,13 +57,15 @@ export default function EventsPage() {
 
   const [selectedEvent, setSelectedEvent] = useState<EventDto | null>(null);
   const [eventToCancel, setEventToCancel] = useState<{event: EventDto, status: string} | null>(null);
+  const [eventToCancelEntire, setEventToCancelEntire] = useState<EventDto | null>(null);
+  const [isCancellingEvent, setIsCancellingEvent] = useState(false);
   const [eventToDelete, setEventToDelete] = useState<EventDto | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
   const [eventToSettle, setEventToSettle] = useState<EventDto | null>(null);
 
-  const handleEventAction = async (event: EventDto, action: "register" | "waitlist" | "edit" | "cancel" | "history" | "settle" | "delete", guestCount?: number) => {
+  const handleEventAction = async (event: EventDto, action: "register" | "waitlist" | "edit" | "cancel" | "history" | "settle" | "delete" | "cancel_event", guestCount?: number) => {
     if (action === "register" || action === "waitlist") {
       try {
         await api.post(`/Events/${event.id}/register`, { guestCount: guestCount || 0 });
@@ -91,6 +93,8 @@ export default function EventsPage() {
     } else if (action === "settle") {
       setEventToSettle(event);
       setIsSettleModalOpen(true);
+    } else if (action === "cancel_event") {
+      setEventToCancelEntire(event);
     } else if (action === "delete") {
       setEventToDelete(event);
     }
@@ -112,6 +116,25 @@ export default function EventsPage() {
       console.error(error);
     } finally {
       setEventToCancel(null);
+    }
+  };
+
+  const confirmCancelEntireEvent = async () => {
+    if (!eventToCancelEntire) return;
+    setIsCancellingEvent(true);
+    try {
+      const response = await api.post(`/Events/${eventToCancelEntire.id}/cancel`);
+      toast.success(response.data?.message || "Event cancelled successfully and players refunded.");
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+      queryClient.invalidateQueries({ queryKey: ["playerStatuses", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["wallet-history"] });
+      queryClient.invalidateQueries({ queryKey: ["activityLogs"] });
+      setEventToCancelEntire(null);
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.error || error.response?.data?.message || "Failed to cancel event.";
+      toast.error(errorMsg);
+    } finally {
+      setIsCancellingEvent(false);
     }
   };
 
@@ -358,6 +381,60 @@ export default function EventsPage() {
             </Button>
             <Button variant="destructive" onClick={confirmCancel} className="w-full sm:w-auto font-semibold">
               Cancel {eventToCancel?.status === "waitlisted" ? "Waitlist" : "Slot"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Organizer/SuperAdmin Cancel Event Confirmation Dialog */}
+      <Dialog open={!!eventToCancelEntire} onOpenChange={(open) => !open && !isCancellingEvent && setEventToCancelEntire(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600 text-xl font-bold">
+              <XCircle className="h-5 w-5" /> Cancel Event
+            </DialogTitle>
+            <DialogDescription className="space-y-3 pt-2 text-left">
+              <p className="text-foreground text-sm font-medium">
+                Are you sure you want to cancel this event? This will mark the session as cancelled and immediately issue a full refund to all registered players.
+              </p>
+              {eventToCancelEntire && (
+                <div className="p-3.5 bg-muted/40 rounded-xl border border-border space-y-1.5">
+                  <p className="font-bold text-foreground text-base">{eventToCancelEntire.name}</p>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5 font-medium">
+                    <Calendar className="h-4 w-4 text-court-blue" />
+                    {format(new Date(eventToCancelEntire.eventDate), "EEEE, MMMM d, yyyy")}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Registered Players: <span className="font-semibold text-foreground">{eventToCancelEntire.registeredPlayersCount}</span>
+                  </p>
+                </div>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex sm:justify-end gap-3 mt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => setEventToCancelEntire(null)} 
+              disabled={isCancellingEvent}
+              className="w-full sm:w-auto font-semibold"
+            >
+              Keep Event
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={confirmCancelEntireEvent} 
+              disabled={isCancellingEvent}
+              className="w-full sm:w-auto font-semibold bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {isCancellingEvent ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Cancelling Event...
+                </>
+              ) : (
+                <>
+                  <XCircle className="h-4 w-4 mr-2" /> Confirm Cancellation
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

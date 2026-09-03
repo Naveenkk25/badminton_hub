@@ -355,6 +355,13 @@ public class EventsController : ControllerBase
 
 
 
+        // Clear any active waitlists
+        foreach (var w in ev.WaitlistEntries.Where(w => !w.IsCancelled && !w.IsPromoted))
+        {
+            w.IsCancelled = true;
+            w.CancelledDate = DateTime.Now;
+        }
+
         var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         Guid.TryParse(userIdString, out Guid userId);
 
@@ -371,7 +378,7 @@ public class EventsController : ControllerBase
         _context.ActivityLogs.Add(log);
 
         await _context.SaveChangesAsync(default);
-        return Ok();
+        return Ok(new { message = "Event cancelled successfully and players have been refunded." });
     }
 
     [Authorize(Roles = "SuperAdmin,Organizer")]
