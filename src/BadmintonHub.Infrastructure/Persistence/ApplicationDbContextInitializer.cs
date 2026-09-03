@@ -91,27 +91,32 @@ public class ApplicationDbContextInitializer
             }
         }
 
-        // Roles and SuperAdmin only. No demo organizers, players, or wallets.
-        var adminMobile = "1234567890";
-        var defaultAdmin = await _userManager.FindByNameAsync(adminMobile);
-        if (defaultAdmin == null)
+        // SuperAdmin with mobile 701098996
+        var adminMobile = "701098996";
+        var admin = await _userManager.FindByNameAsync(adminMobile);
+        if (admin == null)
         {
-            defaultAdmin = new ApplicationUser
+            admin = new ApplicationUser
             {
-                Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                Id = Guid.NewGuid(),
                 UserName = adminMobile,
                 PhoneNumber = adminMobile,
-                FullName = "Super Admin User",
+                FullName = "Admin",
                 Role = UserRole.SuperAdmin,
                 Status = UserStatus.Active,
                 CreatedBy = "System",
                 CreatedDate = DateTime.Now
             };
-            var result = await _userManager.CreateAsync(defaultAdmin, "Admin123!");
+            var result = await _userManager.CreateAsync(admin, "Preety10");
             if (result.Succeeded)
             {
-                await _userManager.AddToRoleAsync(defaultAdmin, UserRole.SuperAdmin.ToString());
+                await _userManager.AddToRoleAsync(admin, UserRole.SuperAdmin.ToString());
             }
+        }
+        else
+        {
+            var token = await _userManager.GeneratePasswordResetTokenAsync(admin);
+            await _userManager.ResetPasswordAsync(admin, token, "Preety10");
         }
     }
 }

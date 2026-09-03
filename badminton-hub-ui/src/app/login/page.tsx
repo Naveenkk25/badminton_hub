@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
 const loginSchema = z.object({
-  mobileNumber: z.string().min(10, "Valid mobile number is required"),
+  mobileNumber: z.string().min(8, "Valid mobile number is required"),
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
