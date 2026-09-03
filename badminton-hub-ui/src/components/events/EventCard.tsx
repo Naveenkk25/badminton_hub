@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
-import { MapPin, Calendar, Clock, DollarSign, Users, CheckCircle2, Lock, Trophy, XCircle, Info, History, MoreVertical, Trash2, Edit } from "lucide-react";
+import { MapPin, Calendar, Clock, DollarSign, Users, CheckCircle2, Lock, Trophy, XCircle, Info, History, MoreVertical, Edit } from "lucide-react";
 import { EventDto, EventStatus, PlayerCategory } from "@/lib/types";
 import { EVENT_STATUS_CONFIG, CATEGORY_CONFIG, formatCurrency, formatTime } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -24,7 +24,7 @@ import {
 interface EventCardProps {
   event: EventDto;
   userStatus?: { status: string, position: number } | null;
-  onAction?: (event: EventDto, action: "register" | "waitlist" | "edit" | "cancel" | "history" | "settle" | "delete" | "cancel_event", guestCount?: number) => void;
+  onAction?: (event: EventDto, action: "register" | "waitlist" | "edit" | "cancel" | "history" | "settle" | "cancel_event", guestCount?: number) => void;
   onViewDetails?: (event: EventDto) => void;
 }
 
@@ -305,17 +305,6 @@ export function EventCard({ event, userStatus, onAction, onViewDetails }: EventC
                     >
                       <XCircle className="mr-2 h-4 w-4" /> Cancel Event
                     </DropdownMenuItem>
-                  )}
-                  {event.status !== EventStatus.Completed && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem 
-                        onClick={() => onAction?.(event, "delete")}
-                        className="cursor-pointer text-match-red focus:text-match-red"
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" /> Delete Event
-                      </DropdownMenuItem>
-                    </>
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
