@@ -91,32 +91,35 @@ public class ApplicationDbContextInitializer
             }
         }
 
-        // SuperAdmin with mobile 701098996
-        var adminMobile = "701098996";
-        var admin = await _userManager.FindByNameAsync(adminMobile);
-        if (admin == null)
+        // SuperAdmin with mobile 701098996 and 7010989996
+        var adminMobiles = new[] { "7010989996", "701098996", "1234567890" };
+        foreach (var mobile in adminMobiles)
         {
-            admin = new ApplicationUser
+            var admin = await _userManager.FindByNameAsync(mobile);
+            if (admin == null)
             {
-                Id = Guid.NewGuid(),
-                UserName = adminMobile,
-                PhoneNumber = adminMobile,
-                FullName = "Admin",
-                Role = UserRole.SuperAdmin,
-                Status = UserStatus.Active,
-                CreatedBy = "System",
-                CreatedDate = DateTime.Now
-            };
-            var result = await _userManager.CreateAsync(admin, "Preety10");
-            if (result.Succeeded)
-            {
-                await _userManager.AddToRoleAsync(admin, UserRole.SuperAdmin.ToString());
+                admin = new ApplicationUser
+                {
+                    Id = Guid.NewGuid(),
+                    UserName = mobile,
+                    PhoneNumber = mobile,
+                    FullName = "Super Admin",
+                    Role = UserRole.SuperAdmin,
+                    Status = UserStatus.Active,
+                    CreatedBy = "System",
+                    CreatedDate = DateTime.Now
+                };
+                var result = await _userManager.CreateAsync(admin, "Preety10");
+                if (result.Succeeded)
+                {
+                    await _userManager.AddToRoleAsync(admin, UserRole.SuperAdmin.ToString());
+                }
             }
-        }
-        else
-        {
-            var token = await _userManager.GeneratePasswordResetTokenAsync(admin);
-            await _userManager.ResetPasswordAsync(admin, token, "Preety10");
+            else
+            {
+                var token = await _userManager.GeneratePasswordResetTokenAsync(admin);
+                await _userManager.ResetPasswordAsync(admin, token, "Preety10");
+            }
         }
     }
 }
