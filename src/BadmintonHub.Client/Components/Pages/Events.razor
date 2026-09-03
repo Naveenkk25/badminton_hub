@@ -1,0 +1,835 @@
+@page "/events"
+@layout MainLayout
+@inject BadmintonHub.Client.Services.UserSession Session
+@inject BadmintonHub.Application.Common.Interfaces.IApplicationDbContext DbContext
+@inject MediatR.ISender Mediator
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject IServiceProvider appServices
+
+<PageTitle>Events - Badminton Hub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <style>
+        .event-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
+            padding: 16px 0;
+        }
+        @@media (min-width: 600px) {
+            .event-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+    </style>
+
+    <div class="d-flex justify-space-between align-center mb-1">
+        <MudText Typo="Typo.h4" Style="font-family: 'Outfit', sans-serif; font-weight: bold; color: #1c1e21;">
+            Badminton Events
+        </MudText>
+        
+        @if (Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.Organizer || Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.SuperAdmin)
+        {
+            <MudButton Variant="Variant.Filled" 
+                   Color="Color.Primary" 
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="async () => await OpenCreateEventDialog()"
+                   Style="border-radius: 8px; text-transform: none; font-weight: bold; background-color: #1877F2;">
+                Create Event
+            </MudButton>
+        }
+    </div>
+    
+    <MudText Typo="Typo.body1" Class="mud-text-secondary mb-4">
+        View open slots, join waitlists, and manage upcoming schedules.
+    </MudText>
+
+    <!-- Event Tabs -->
+    @{
+        RenderFragment<Event> EventCardTemplate = (ev) => @<text>
+            @{
+                var isFull = ev.Status == EventStatus.Full || ev.RegisteredPlayersCount >= ev.MaxPlayers;
+                var isCutoffPassed = DateTime.Now >= ev.CutoffDateTime;
+                var isRegistered = _myRegistrations.Contains(ev.Id);
+                var isWaitlisted = _myWaitlists.Contains(ev.Id);
+                var isCompleted = ev.Status == EventStatus.Completed;
+                var isCancelled = ev.Status == EventStatus.Cancelled;
+                var isLocked = ev.Status == EventStatus.Locked;
+                
+                string cardBorderColor = "#42B72A"; // Open (Green)
+                string statusBannerColor = "#E8F5E9";
+                string statusTextColor = "#42B72A";
+                string statusText = "OPEN FOR BOOKING";
+                
+                if (isCompleted)
+                {
+                    cardBorderColor = "#9E9E9E"; // Gray
+                    statusBannerColor = "#F5F5F5";
+                    statusTextColor = "#757575";
+                    statusText = "COMPLETED";
+                }
+                else if (isCancelled)
+                {
+                    cardBorderColor = "#D32F2F"; // Red
+                    statusBannerColor = "#FFEBEE";
+                    statusTextColor = "#D32F2F";
+                    statusText = "CANCELLED";
+                }
+                else if (isLocked)
+                {
+                    cardBorderColor = "#FF9800"; // Orange
+                    statusBannerColor = "#FFF3E0";
+                    statusTextColor = "#F57C00";
+                    statusText = "CLOSED";
+                }
+                else if (isFull)
+                {
+                    cardBorderColor = "#EF5350"; // Light Red
+                    statusBannerColor = "#FFEBEE";
+                    statusTextColor = "#EF5350";
+                    statusText = "FULL – WAITLIST OPEN";
+                }
+                else if (isCutoffPassed)
+                {
+                    cardBorderColor = "#FF9800"; // Orange
+                    statusBannerColor = "#FFF3E0";
+                    statusTextColor = "#F57C00";
+                    statusText = "REGISTRATION CLOSED";
+                }
+                
+                var cardBgColor = "#FFFFFF";
+            }
+                        
+            <MudCard Elevation="1" Style="@($"border: 1px solid {cardBorderColor}; border-radius: 8px; background-color: {cardBgColor}; display: flex; flex-direction: column; justify-content: space-between;")">
+                <MudCardContent Class="pa-2">
+                    <!-- Status Banner header per specifications -->
+                    <div class="d-flex justify-content-between align-items-center mb-1 pa-1" Style="@($"background-color: {statusBannerColor}; border-radius: 6px;")">
+                        <MudText Typo="Typo.caption" Class="font-weight-bold mx-1" Style="@($"color: {statusTextColor};")">
+                            @statusText
+                        </MudText>
+                        <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Text" Class="ma-0 px-1" Style="font-size: 0.7rem;">
+                            @ev.Category
+                        </MudChip>
+                    </div>
+                    
+                    <MudText Typo="Typo.subtitle1" Class="font-weight-bold mb-1" Style="font-family: 'Outfit', sans-serif; line-height: 1.2;">@ev.Name</MudText>
+                    
+                    <div class="d-flex align-items-center mb-1">
+                        <MudIcon Icon="@Icons.Material.Filled.Place" Size="Size.Small" Class="mr-1 mud-text-secondary" Style="font-size: 1rem;" />
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary" Style="font-size: 0.85rem;">@ev.Venue</MudText>
+                    </div>
+                    
+                    <div class="d-flex align-items-center mb-1">
+                        <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Size="Size.Small" Class="mr-1 mud-text-secondary" Style="font-size: 1rem;" />
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary" Style="font-size: 0.85rem;">
+                            @ev.EventDate.ToShortDateString() (@ev.StartTime.ToString(@"hh\:mm") - @ev.EndTime.ToString(@"hh\:mm"))
+                        </MudText>
+                    </div>
+
+                    <div class="d-flex align-items-center mb-1">
+                        <MudIcon Icon="@Icons.Material.Filled.AccessTime" Size="Size.Small" Class="mr-1 mud-text-secondary" Style="font-size: 1rem;" />
+                        <MudText Typo="Typo.caption" Color="Color.Warning" Class="font-weight-bold">
+                            Cutoff: @ev.CutoffDateTime.ToLocalTime()
+                        </MudText>
+                    </div>
+
+                    <!-- Capacity Indicators -->
+                    <div class="mb-1 mt-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Capacity:</MudText>
+                            <MudText Typo="Typo.caption" Class="font-weight-bold" Style="@($"color: {statusTextColor};")">
+                                @ev.RegisteredPlayersCount / @ev.MaxPlayers
+                            </MudText>
+                        </div>
+                        <MudProgressLinear Value="@(((double)ev.RegisteredPlayersCount / ev.MaxPlayers) * 100)" 
+                                           Color="@(isFull ? Color.Error : Color.Success)" 
+                                           Class="my-1" 
+                                           Style="height: 4px; border-radius: 2px;" />
+                        @if (ev.WaitlistedPlayersCount > 0)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Error" Class="font-weight-bold d-block text-right">
+                                @ev.WaitlistedPlayersCount Waitlist
+                            </MudText>
+                        }
+                    </div>
+                    
+                    <div class="d-flex justify-content-between align-items-center mt-1">
+                        @if (isCompleted)
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Default" Class="font-weight-bold mud-text-secondary">
+                                Completion Date: @(ev.ModifiedDate?.ToLocalTime().ToShortDateString() ?? "N/A")
+                            </MudText>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Primary" Class="font-weight-bold">
+                                Fee: @ev.EventFee.ToString("C")
+                            </MudText>
+                        }
+                    </div>
+                </MudCardContent>
+                
+                <MudCardActions Class="pa-2 pt-0">
+                    @if (isCompleted)
+                    {
+                        <!-- Intentionally blank, "View Details" button will be rendered at bottom -->
+                    }
+                    else if (isRegistered)
+                    {
+                        var reg = _userRegistrationsList.FirstOrDefault(r => r.EventId == ev.Id && !r.IsCancelled);
+                        <div class="w-100 d-flex flex-column gap-1">
+                            <MudAlert Severity="Severity.Success" Dense="true" Style="border-radius: 6px; padding: 4px 8px;" Class="my-0 text-center">Booked</MudAlert>
+                            @if (!isCutoffPassed && reg != null && !isCancelled && !isLocked)
+                            {
+                                <MudButton Variant="Variant.Outlined" Color="Color.Error" FullWidth="true" OnClick="() => CancelRegistration(reg.Id)" Size="Size.Small" Style="text-transform: none; border-radius: 6px; padding: 2px;">
+                                    Cancel & Refund
+                                </MudButton>
+                            }
+                        </div>
+                    }
+                    else if (isWaitlisted)
+                    {
+                        <div class="w-100 d-flex flex-column gap-1">
+                            <MudAlert Severity="Severity.Warning" Dense="true" Style="border-radius: 6px; padding: 4px 8px;" Class="my-0 text-center">Waitlisted</MudAlert>
+                        </div>
+                    }
+                    else if (isCutoffPassed || isLocked || isCancelled)
+                    {
+                        <MudButton Variant="Variant.Filled" Disabled="true" FullWidth="true" Size="Size.Small" Style="text-transform: none; border-radius: 6px;">
+                            @(isCancelled ? "Cancelled" : "Closed")
+                        </MudButton>
+                    }
+                    else
+                    {
+                        @if (isFull)
+                        {
+                            <MudButton Variant="Variant.Filled" 
+                                       Color="Color.Error" 
+                                       FullWidth="true" 
+                                       OnClick="() => JoinEvent(ev.Id)"
+                                       Size="Size.Small"
+                                       Style="text-transform: none; border-radius: 6px; font-weight: bold; background-color: #EF5350;">
+                                Join Waitlist
+                            </MudButton>
+                        }
+                        else
+                        {
+                            <MudButton Variant="Variant.Filled" 
+                                       Color="Color.Success" 
+                                       FullWidth="true" 
+                                       OnClick="() => JoinEvent(ev.Id)"
+                                       Size="Size.Small"
+                                       Style="text-transform: none; border-radius: 6px; font-weight: bold; background-color: #42B72A;">
+                                Book Spot
+                            </MudButton>
+                        }
+                    }
+
+                    @if (Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.SuperAdmin || 
+                        (Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.Organizer && ev.OrganizerId == _currentOrganizerId))
+                    {
+                        <div class="w-100 d-flex gap-1 mt-1">
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => OpenManageEventModal(ev)" FullWidth="true" Size="Size.Small" Style="text-transform: none; border-radius: 6px;">
+                                Details
+                            </MudButton>
+                            @if (!isCompleted)
+                            {
+                                <MudMenu Icon="@Icons.Material.Filled.MoreVert" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Size="Size.Small" Dense="true">
+                                    <MudMenuItem OnClick="() => OpenEditEventDialog(ev)" Icon="@Icons.Material.Filled.Edit">Edit</MudMenuItem>
+                                    @if(ev.Status == EventStatus.Open || ev.Status == EventStatus.Full)
+                                    {
+                                        <MudMenuItem OnClick="() => ChangeEventStatus(ev, EventStatus.Cancelled)" Icon="@Icons.Material.Filled.Cancel" Style="color: orange;">Cancel</MudMenuItem>
+                                        <MudMenuItem OnClick="() => ChangeEventStatus(ev, EventStatus.Locked)" Icon="@Icons.Material.Filled.Lock">Close</MudMenuItem>
+                                    }
+                                    else if(ev.Status == EventStatus.Locked)
+                                    {
+                                        <MudMenuItem OnClick="() => ChangeEventStatus(ev, EventStatus.Open)" Icon="@Icons.Material.Filled.LockOpen">Reopen</MudMenuItem>
+                                    }
+                                    <MudMenuItem OnClick="() => ChangeEventStatus(ev, EventStatus.Completed)" Icon="@Icons.Material.Filled.CheckCircle">Complete</MudMenuItem>
+                                    <MudDivider />
+                                    <MudMenuItem OnClick="() => DeleteEvent(ev)" Icon="@Icons.Material.Filled.Delete" Style="color: red;">Delete</MudMenuItem>
+                                </MudMenu>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        @if (isCompleted || Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.Player)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="() => OpenManageEventModal(ev)" Class="w-100 mt-1" Size="Size.Small" Style="text-transform: none;">
+                                Details
+                            </MudButton>
+                        }
+                    }
+                </MudCardActions>
+            </MudCard>
+        </text>;
+    }
+
+    <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" Class="pt-2">
+        <MudTabPanel Text="Active Events">
+            <div class="event-grid">
+                @foreach (var ev in _activeEvents)
+                {
+                    @EventCardTemplate(ev)
+                }
+            </div>
+        </MudTabPanel>
+        <MudTabPanel Text="Completed Events">
+            <div class="event-grid">
+                @foreach (var ev in _completedEvents)
+                {
+                    @EventCardTemplate(ev)
+                }
+            </div>
+        </MudTabPanel>
+    </MudTabs>
+
+</MudContainer>
+
+<!-- CREATE/EDIT EVENT MODAL -->
+<MudDialog @bind-Visible="_createEventVisible" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6" Class="font-weight-bold">@(_isEditEvent ? "Edit Event" : "Create New Event")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="d-flex flex-column gap-4 pa-2">
+            <!-- ShrinkLabel=true prevents overlaps completely -->
+            <MudTextField @bind-Value="_newEvent.Name" Label="Event Name" Required="true" Variant="Variant.Outlined" ShrinkLabel="true" />
+            <MudTextField @bind-Value="_newEvent.Venue" Label="Venue" Required="true" Variant="Variant.Outlined" ShrinkLabel="true" />
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker @bind-Date="_newEventDate" Label="Event Date" Required="true" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="PlayerCategory" @bind-Value="_newEvent.Category" Label="Category" Variant="Variant.Outlined">
+                        <MudSelectItem Value="PlayerCategory.Advanced">Advanced</MudSelectItem>
+                        <MudSelectItem Value="PlayerCategory.Intermediate">Intermediate</MudSelectItem>
+                        <MudSelectItem Value="PlayerCategory.Plus">Plus</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="TimeSpan?" Label="Start Time" @bind-Value="_newEventStartTime" Required="true" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                        @foreach(var time in _timeOptions)
+                        {
+                            <MudSelectItem T="TimeSpan?" Value="@time">@DateTime.Today.Add(time ?? TimeSpan.Zero).ToString("hh:mm tt")</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="TimeSpan?" Label="End Time" @bind-Value="_newEventEndTime" Required="true" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                        @foreach(var time in _timeOptions)
+                        {
+                            <MudSelectItem T="TimeSpan?" Value="@time">@DateTime.Today.Add(time ?? TimeSpan.Zero).ToString("hh:mm tt")</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="_newEvent.EventFee" Label="Event Fee ($)" Required="true" Format="N2" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="_newEvent.MaxPlayers" Label="Max Capacity" Required="true" Min="1" Variant="Variant.Outlined" />
+                </MudItem>
+            </MudGrid>
+            <MudDatePicker @bind-Date="_newEventCutoffDate" Label="Cutoff Date" Required="true" Variant="Variant.Outlined" />
+            <MudSelect T="TimeSpan?" Label="Cutoff Time" @bind-Value="_newEventCutoffTime" Required="true" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                @foreach(var time in _timeOptions)
+                {
+                    <MudSelectItem T="TimeSpan?" Value="@time">@DateTime.Today.Add(time ?? TimeSpan.Zero).ToString("hh:mm tt")</MudSelectItem>
+                }
+            </MudSelect>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _createEventVisible = false">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveEvent" Style="background-color: #1877F2; text-transform: none;">@(_isEditEvent ? "Save Changes" : "Create Event")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<!-- MANAGE EVENT DETAIL MODAL -->
+<MudDialog @bind-Visible="_manageEventVisible" Options="_detailsDialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6" Class="font-weight-bold">Manage Event: @_selectedEvent?.Name</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_selectedEventDetails != null)
+        {
+            <MudTabs Elevation="0" Outlined="true" Class="mt-2" Rounded="true" Style="border-radius: 8px;">
+                <!-- Registered Tab -->
+                <MudTabPanel Text="Participants" Icon="@Icons.Material.Filled.CheckCircle">
+                    @if (_selectedEventDetails.Registrations.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="pa-4 text-center mud-text-secondary">No registered players yet.</MudText>
+                    }
+                    else
+                    {
+                        <MudSimpleTable Dense="true" Hover="true">
+                            <thead>
+                                <tr>
+                                    <th>Player Name</th>
+                                    <th>Mobile</th>
+                                    <th>Level</th>
+                                    <th>Date Registered</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var reg in _selectedEventDetails.Registrations)
+                                {
+                                    <tr>
+                                        <td>@reg.PlayerName</td>
+                                        <td>@reg.PlayerMobile</td>
+                                        <td>@reg.PlayerCategory</td>
+                                        <td>@reg.RegistrationDate.ToLocalTime()</td>
+                                        <td>
+                                            <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" OnClick="() => CancelRegistration(reg.Id)">
+                                                Cancel & Refund
+                                            </MudButton>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                </MudTabPanel>
+
+                <!-- Waitlist Tab -->
+                <MudTabPanel Text="Waitlist" Icon="@Icons.Material.Filled.AccessTime">
+                    @if (_selectedEventDetails.Waitlist.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="pa-4 text-center mud-text-secondary">No players on waitlist.</MudText>
+                    }
+                    else
+                    {
+                        <MudSimpleTable Dense="true" Hover="true">
+                            <thead>
+                                <tr>
+                                    <th>Pos</th>
+                                    <th>Player Name</th>
+                                    <th>Mobile</th>
+                                    <th>Joined Waitlist</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var wl in _selectedEventDetails.Waitlist)
+                                {
+                                    <tr>
+                                        <td>@wl.Position</td>
+                                        <td>@wl.PlayerName</td>
+                                        <td>@wl.PlayerMobile</td>
+                                        <td>@wl.JoinedDate.ToLocalTime()</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                </MudTabPanel>
+
+                <!-- Logs Tab -->
+                <MudTabPanel Text="Event Activity Logs" Icon="@Icons.Material.Filled.History">
+                    <div style="max-height: 250px; overflow-y: auto;" class="pa-2">
+                        @if (_selectedEventDetails.ActivityLogs.Count == 0)
+                        {
+                            <MudText Typo="Typo.body2" Class="pa-4 text-center mud-text-secondary">No event logs recorded.</MudText>
+                        }
+                        else
+                        {
+                            <MudList T="string" Dense="true">
+                                @foreach (var log in _selectedEventDetails.ActivityLogs)
+                                {
+                                    <MudListItem>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">[@log.Timestamp.ToLocalTime()]</MudText>
+                                        <MudText Typo="Typo.body2"><strong>@log.UserFullName</strong>: @log.Description</MudText>
+                                    </MudListItem>
+                                }
+                            </MudList>
+                        }
+                    </div>
+                </MudTabPanel>
+            </MudTabs>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => _manageEventVisible = false" Style="background-color: #1877F2; text-transform: none;">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<Event> _eventsList = new();
+    private List<Event> _activeEvents = new();
+    private List<Event> _completedEvents = new();
+    private List<Registration> _userRegistrationsList = new();
+    private HashSet<Guid> _myRegistrations = new();
+    private HashSet<Guid> _myWaitlists = new();
+
+    private Guid? _currentOrganizerId;
+    private bool _isEditEvent;
+    private Guid _eventToEditId;
+
+    private bool _createEventVisible;
+    private DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
+    private Event _newEvent = new();
+    private DateTime? _newEventDate = DateTime.Today;
+    private TimeSpan? _newEventStartTime = new TimeSpan(18, 0, 0);
+    private TimeSpan? _newEventEndTime = new TimeSpan(20, 0, 0);
+    private DateTime? _newEventCutoffDate = DateTime.Today;
+    private TimeSpan? _newEventCutoffTime = new TimeSpan(17, 0, 0);
+    private List<TimeSpan?> _timeOptions = Enumerable.Range(0, 96).Select(i => (TimeSpan?)TimeSpan.FromMinutes(15 * i)).ToList();
+
+    // Event Details variables
+    private bool _manageEventVisible;
+    private DialogOptions _detailsDialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true };
+    private Event? _selectedEvent;
+    private EventDetailsVm? _selectedEventDetails;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        using var scope = appServices.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+        
+        var query = db.Events.Include(e => e.Organizer).AsQueryable();
+
+        if (Session.IsLoggedIn)
+        {
+            var playerId = Session.CurrentUser!.Id;
+            if (Session.CurrentUser.Role == UserRole.Organizer)
+            {
+                var org = await db.Organizers.FirstOrDefaultAsync(o => o.ContactNumber == Session.CurrentUser.PhoneNumber);
+                _currentOrganizerId = org?.Id;
+                if (_currentOrganizerId.HasValue)
+                {
+                    query = query.Where(e => e.OrganizerId == _currentOrganizerId.Value);
+                }
+            }
+
+            _userRegistrationsList = await db.Registrations
+                .Where(r => r.PlayerId == playerId && !r.IsCancelled)
+                .ToListAsync();
+
+            _myRegistrations = _userRegistrationsList.Select(r => r.EventId).ToHashSet();
+
+            var wl = await db.Waitlists
+                .Where(w => w.PlayerId == playerId && !w.IsCancelled && !w.IsPromoted)
+                .ToListAsync();
+
+            _myWaitlists = wl.Select(w => w.EventId).ToHashSet();
+        }
+
+        _eventsList = await query.ToListAsync();
+
+        _activeEvents = _eventsList
+            .Where(e => e.Status != EventStatus.Completed)
+            .OrderBy(e => e.EventDate)
+            .ToList();
+
+        _completedEvents = _eventsList
+            .Where(e => e.Status == EventStatus.Completed)
+            .OrderByDescending(e => e.ModifiedDate)
+            .Take(8)
+            .ToList();
+    }
+
+    private async Task OpenCreateEventDialog()
+    {
+        Guid organizerId = Guid.Parse("11111111-1111-1111-1111-111111111111"); // default organizer
+        
+        if (Session.CurrentUser?.Role == UserRole.Organizer)
+        {
+            using var scope = appServices.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+            var org = await db.Organizers
+                .FirstOrDefaultAsync(o => o.ContactNumber == Session.CurrentUser.PhoneNumber);
+            if (org != null)
+            {
+                organizerId = org.Id;
+            }
+        }
+
+        _isEditEvent = false;
+        _newEvent = new Event
+        {
+            OrganizerId = organizerId,
+            Category = PlayerCategory.Intermediate,
+            MaxPlayers = 20,
+            EventFee = 15.00m
+        };
+        _newEventDate = DateTime.Today.AddDays(1);
+        _newEventCutoffDate = DateTime.Today.AddDays(1);
+        _createEventVisible = true;
+    }
+
+    private void OpenEditEventDialog(Event ev)
+    {
+        _isEditEvent = true;
+        _eventToEditId = ev.Id;
+        _newEvent = new Event
+        {
+            OrganizerId = ev.OrganizerId,
+            Category = ev.Category,
+            MaxPlayers = ev.MaxPlayers,
+            EventFee = ev.EventFee,
+            Name = ev.Name,
+            Venue = ev.Venue,
+            Status = ev.Status
+        };
+        _newEventDate = ev.EventDate;
+        _newEventStartTime = ev.StartTime;
+        _newEventEndTime = ev.EndTime;
+        _newEventCutoffDate = ev.CutoffDateTime.Date;
+        _newEventCutoffTime = ev.CutoffDateTime.TimeOfDay;
+        _createEventVisible = true;
+    }
+
+    private async Task SaveEvent()
+    {
+        if (string.IsNullOrWhiteSpace(_newEvent.Name) || string.IsNullOrWhiteSpace(_newEvent.Venue))
+        {
+            Snackbar.Add("Please enter all required event details.", Severity.Warning);
+            return;
+        }
+
+        if (_newEventDate == null || _newEventStartTime == null || _newEventEndTime == null || _newEventCutoffDate == null || _newEventCutoffTime == null)
+        {
+            Snackbar.Add("Please enter valid dates and times.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            if (_isEditEvent)
+            {
+                using var scope = appServices.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+                var ev = await db.Events.FindAsync(_eventToEditId);
+                if (ev != null)
+                {
+                    if (Session.CurrentUser?.Role == UserRole.Organizer && ev.OrganizerId != _currentOrganizerId)
+                    {
+                        Snackbar.Add("You do not have permission to edit this event.", Severity.Error);
+                        return;
+                    }
+
+                    ev.Name = _newEvent.Name;
+                    ev.Venue = _newEvent.Venue;
+                    ev.EventDate = _newEventDate.Value;
+                    ev.StartTime = _newEventStartTime.Value;
+                    ev.EndTime = _newEventEndTime.Value;
+                    ev.EventFee = _newEvent.EventFee;
+                    ev.Category = _newEvent.Category;
+                    ev.MaxPlayers = _newEvent.MaxPlayers;
+                    ev.CutoffDateTime = _newEventCutoffDate.Value.Date.Add(_newEventCutoffTime.Value);
+                    ev.ModifiedDate = DateTime.Now;
+                    ev.ModifiedBy = Session.CurrentUser?.Id.ToString() ?? "System";
+
+                    var log = new ActivityLog
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = Session.CurrentUser?.Id ?? Guid.Empty,
+                        Action = "Event Edited",
+                        Description = $"Event '{ev.Name}' was updated.",
+                        Timestamp = DateTime.Now,
+                        CreatedDate = DateTime.Now
+                    };
+                    db.ActivityLogs.Add(log);
+
+                    await db.SaveChangesAsync(default);
+                    Snackbar.Add("Event updated successfully!", Severity.Success);
+                }
+            }
+            else
+            {
+                var command = new CreateEventCommand
+                {
+                    OrganizerId = _newEvent.OrganizerId,
+                    Name = _newEvent.Name,
+                    Venue = _newEvent.Venue,
+                    EventDate = _newEventDate.Value,
+                    StartTime = _newEventStartTime.Value,
+                    EndTime = _newEventEndTime.Value,
+                    EventFee = _newEvent.EventFee,
+                    Category = _newEvent.Category,
+                    MaxPlayers = _newEvent.MaxPlayers,
+                    CutoffDateTime = _newEventCutoffDate.Value.Date.Add(_newEventCutoffTime.Value)
+                };
+
+                await Mediator.Send(command);
+                Snackbar.Add("Event created successfully! 1 Credit consumed.", Severity.Success);
+                await Session.RefreshUserAsync();
+            }
+
+            _createEventVisible = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    @inject IDialogService DialogService
+
+    private async Task DeleteEvent(Event ev)
+    {
+        bool? result = await DialogService.ShowMessageBoxAsync(
+            "Delete Event",
+            $"Are you sure you want to delete '{ev.Name}'? This will also cancel all registrations and waitlists.",
+            yesText: "Delete!", cancelText: "Cancel");
+
+        if (result == true)
+        {
+            try
+            {
+                using var scope = appServices.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+                var targetEvent = await db.Events.FindAsync(ev.Id);
+                if (targetEvent != null)
+                {
+                    if (Session.CurrentUser?.Role == UserRole.Organizer && targetEvent.OrganizerId != _currentOrganizerId)
+                    {
+                        Snackbar.Add("You do not have permission to delete this event.", Severity.Error);
+                        return;
+                    }
+
+                    targetEvent.IsDeleted = true;
+                    targetEvent.DeletedDate = DateTime.Now;
+                    targetEvent.DeletedBy = Session.CurrentUser?.Id.ToString() ?? "System";
+
+                    var log = new ActivityLog
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = Session.CurrentUser?.Id ?? Guid.Empty,
+                        Action = "Event Deleted",
+                        Description = $"Event '{targetEvent.Name}' was soft deleted.",
+                        Timestamp = DateTime.Now,
+                        CreatedDate = DateTime.Now
+                    };
+                    db.ActivityLogs.Add(log);
+
+                    await db.SaveChangesAsync(default);
+                    Snackbar.Add("Event deleted successfully.", Severity.Success);
+                    await LoadDataAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+        }
+    }
+
+    private async Task ChangeEventStatus(Event ev, EventStatus newStatus)
+    {
+        try
+        {
+            using var scope = appServices.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+            var targetEvent = await db.Events.FindAsync(ev.Id);
+            if (targetEvent != null)
+            {
+                if (Session.CurrentUser?.Role == UserRole.Organizer && targetEvent.OrganizerId != _currentOrganizerId)
+                {
+                    Snackbar.Add("You do not have permission to change the status of this event.", Severity.Error);
+                    return;
+                }
+
+                targetEvent.Status = newStatus;
+                targetEvent.ModifiedDate = DateTime.Now;
+                targetEvent.ModifiedBy = Session.CurrentUser?.Id.ToString() ?? "System";
+
+                var log = new ActivityLog
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = Session.CurrentUser?.Id ?? Guid.Empty,
+                    Action = "Event Status Changed",
+                    Description = $"Event '{targetEvent.Name}' status changed to {newStatus}.",
+                    Timestamp = DateTime.Now,
+                    CreatedDate = DateTime.Now
+                };
+                db.ActivityLogs.Add(log);
+
+                await db.SaveChangesAsync(default);
+                Snackbar.Add($"Event status changed to {newStatus}.", Severity.Info);
+                await LoadDataAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task JoinEvent(Guid eventId)
+    {
+        if (!Session.IsLoggedIn)
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        try
+        {
+            var command = new RegisterPlayerCommand
+            {
+                EventId = eventId,
+                PlayerId = Session.CurrentUser!.Id
+            };
+
+            var result = await Mediator.Send(command);
+            if (result.Status == "Registered")
+            {
+                Snackbar.Add("Successfully registered for this event!", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add($"Event is full. Added to waitlist at position {result.WaitlistPosition}.", Severity.Warning);
+            }
+
+            await Session.RefreshUserAsync();
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task CancelRegistration(Guid registrationId)
+    {
+        try
+        {
+            var command = new CancelRegistrationCommand(registrationId);
+            var result = await Mediator.Send(command);
+            if (result.Success)
+            {
+                Snackbar.Add(result.Message, Severity.Success);
+                await Session.RefreshUserAsync();
+                await LoadDataAsync();
+                if (_manageEventVisible && _selectedEvent != null)
+                {
+                    await OpenManageEventModal(_selectedEvent);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task OpenManageEventModal(Event ev)
+    {
+        _selectedEvent = ev;
+        _selectedEventDetails = await Mediator.Send(new GetEventDetailsQuery(ev.Id));
+        _manageEventVisible = true;
+    }
+}

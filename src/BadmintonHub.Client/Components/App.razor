@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <title>Badminton Hub</title>
+    
+    <!-- Google Fonts for premium typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    
+    <!-- MudBlazor Styles -->
+    <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
+    
+    <!-- App & Custom CSS -->
+    <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="BadmintonHub.Client.styles.css" />
+    
+    <!-- PWA Manifest & Icons -->
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="icon-512.png" />
+    <meta name="theme-color" content="#1877F2" />
+    
+    <HeadOutlet />
+</head>
+
+<body class="mud-typography">
+    <!-- CRITICAL: Added InteractiveServer render mode to Routes to boot SignalR circuit -->
+    <Routes @rendermode="InteractiveServer" />
+    
+    <!-- MudBlazor Script -->
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script src="_framework/blazor.web.js"></script>
+    
+    <!-- Service Worker registration for PWA -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('service-worker.js')
+                .then(reg => console.log('Service Worker Registered', reg))
+                .catch(err => console.error('Service Worker Registration Failed', err));
+        }
+
+        // Download file helper for Blazor Server
+        function downloadFile(fileName, contentType, base64Content) {
+            const binaryString = window.atob(base64Content);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            const blob = new Blob([bytes], { type: contentType });
+            const link = document.createElement('a');
+            link.href = window.URL.createObjectURL(blob);
+            link.download = fileName;
+            link.click();
+            window.URL.revokeObjectURL(link.href);
+        }
+    </script>
+</body>
+
+</html>

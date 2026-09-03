@@ -1,0 +1,108 @@
+@page "/login"
+@layout MainLayout
+@inject NavigationManager Navigation
+@inject BadmintonHub.Client.Services.UserSession Session
+@inject ISnackbar Snackbar
+
+<PageTitle>Login - Badminton Hub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
+    <MudPaper Elevation="3" Class="pa-8 d-flex flex-column align-items-center" Style="border-radius: 12px; background-color: #ffffff;">
+        <MudIcon Icon="@Icons.Material.Filled.SportsTennis" Color="Color.Primary" Size="Size.Large" Class="mb-4" />
+        <MudText Typo="Typo.h4" Align="Align.Center" Class="font-weight-bold mb-2" Style="color: #1c1e21; font-family: 'Outfit', sans-serif;">Badminton Hub</MudText>
+        <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary mb-6">Connect and book games with your local community</MudText>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="mb-4 w-100" Style="border-radius: 8px;">
+                @_errorMessage
+            </MudAlert>
+        }
+
+        <EditForm Model="@_loginModel" OnValidSubmit="ExecuteLogin" Class="w-100">
+            <!-- Outlined floating label style with ShrinkLabel to completely prevent overlap bugs -->
+            <MudTextField @bind-Value="_loginModel.MobileNumber" 
+                          Label="Mobile Number" 
+                          Variant="Variant.Outlined" 
+                          InputType="InputType.Telephone"
+                          Required="true"
+                          ShrinkLabel="true"
+                          Class="mb-4" />
+                          
+            <MudTextField @bind-Value="_loginModel.Password" 
+                          Label="Password" 
+                          Variant="Variant.Outlined" 
+                          InputType="InputType.Password" 
+                          Required="true"
+                          ShrinkLabel="true"
+                          Class="mb-6" />
+
+            <MudButton ButtonType="ButtonType.Submit" 
+                       Variant="Variant.Filled" 
+                       Color="Color.Primary" 
+                       FullWidth="true" 
+                       Size="Size.Large"
+                       Style="border-radius: 8px; text-transform: none; font-weight: bold; background-color: #1877F2;">
+                Log In
+            </MudButton>
+        </EditForm>
+
+        <MudDivider Class="my-6 w-100" />
+
+        <MudButton Variant="Variant.Outlined" 
+                   Color="Color.Secondary" 
+                   FullWidth="true" 
+                   Size="Size.Medium" 
+                   OnClick="GoToActivation"
+                   Style="border-radius: 8px; text-transform: none; font-weight: bold; border-color: #42b72a; color: #42b72a;">
+            First Time Login? Activate Account
+        </MudButton>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private LoginViewModel _loginModel = new();
+    private string? _errorMessage;
+
+    protected override void OnInitialized()
+    {
+        if (Session.IsLoggedIn)
+        {
+            Navigation.NavigateTo("/dashboard");
+        }
+    }
+
+    private async Task ExecuteLogin()
+    {
+        _errorMessage = null;
+        var success = await Session.LoginAsync(_loginModel.MobileNumber, _loginModel.Password);
+        if (success)
+        {
+            Snackbar.Add("Login Successful", Severity.Success);
+            
+            if (Session.CurrentUser?.Status == BadmintonHub.Domain.Enums.UserStatus.PendingActivation)
+            {
+                Navigation.NavigateTo("/activate");
+            }
+            else
+            {
+                Navigation.NavigateTo("/dashboard");
+            }
+        }
+        else
+        {
+            _errorMessage = "Invalid mobile number or password, or account suspended.";
+        }
+    }
+
+    private void GoToActivation()
+    {
+        Navigation.NavigateTo("/activate");
+    }
+
+    public class LoginViewModel
+    {
+        public string MobileNumber { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+}

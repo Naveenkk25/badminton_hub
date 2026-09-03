@@ -1,0 +1,686 @@
+@page "/manage/players"
+@layout MainLayout
+@inject BadmintonHub.Client.Services.UserSession Session
+@inject BadmintonHub.Application.Common.Interfaces.IApplicationDbContext DbContext
+@inject MediatR.ISender Mediator
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject IServiceProvider appServices
+
+<PageTitle>Manage Players - Badminton Hub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <div class="d-flex justify-space-between align-center mb-1">
+        <MudText Typo="Typo.h4" Style="font-family: 'Outfit', sans-serif; font-weight: bold; color: #1c1e21;">
+            Manage Players
+        </MudText>
+
+        <MudButton Variant="Variant.Filled" 
+                   Color="Color.Primary" 
+                   StartIcon="@Icons.Material.Filled.PersonAdd"
+                   OnClick="OpenOnboardDialog"
+                   Style="border-radius: 8px; text-transform: none; font-weight: bold; background-color: #1877F2;">
+            Onboard Player
+        </MudButton>
+    </div>
+    
+    <MudText Typo="Typo.body1" Class="mud-text-secondary mb-4">
+        Onboard new players, update level categories, and adjust/fund wallet balances.
+    </MudText>
+
+    @if (_loading)
+    {
+        <div class="d-flex justify-content-center align-items-center pa-10">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        </div>
+    }
+    else
+    {
+        <!-- Players Table -->
+        <MudPaper Elevation="2" Style="border-radius: 12px;" Class="pa-4">
+            <MudTable Items="_playersList" Hover="true" Striped="true" Filter="new Func<ApplicationUser,bool>(FilterFunc)">
+                <ToolBarContent>
+                    <MudText Typo="Typo.h6">Registered Player Directory</MudText>
+                    <MudSpacer />
+                    <MudTextField @bind-Value="_searchString" Placeholder="Search by Name or Mobile..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" />
+                </ToolBarContent>
+                <HeaderContent>
+                    <MudTh>Name</MudTh>
+                    <MudTh>Mobile / Username</MudTh>
+                    <MudTh>Email</MudTh>
+                    <MudTh>Category</MudTh>
+                    <MudTh>Wallet Balance</MudTh>
+                    <MudTh>Status</MudTh>
+                    <MudTh>Actions</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Name"><strong>@context.FullName</strong></MudTd>
+                    <MudTd DataLabel="Mobile / Username">@context.PhoneNumber</MudTd>
+                    <MudTd DataLabel="Email">@(string.IsNullOrEmpty(context.Email) ? "N/A" : context.Email)</MudTd>
+                    <MudTd DataLabel="Category">
+                        <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Text">@context.Category</MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Wallet Balance">
+                        <MudText Color="Color.Primary" Class="font-weight-bold">@context.WalletBalance.ToString("C")</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Status">
+                        <MudChip T="string" Color="@(context.Status == BadmintonHub.Domain.Enums.UserStatus.Active ? Color.Success : Color.Warning)" Size="Size.Small">
+                            @(context.Status == BadmintonHub.Domain.Enums.UserStatus.Active ? "Active" : context.Status == BadmintonHub.Domain.Enums.UserStatus.PendingActivation ? "Pending Activation" : "Inactive")
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Actions">
+                        <MudMenu Label="Actions" EndIcon="@Icons.Material.Filled.KeyboardArrowDown" Size="Size.Small" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                            <MudMenuItem OnClick="() => OpenEditPlayerDialog(context)" Icon="@Icons.Material.Filled.Edit">Edit Player</MudMenuItem>
+                            <MudMenuItem OnClick="@(async () => await OpenManageWalletDialog(context, "Credit"))" Icon="@Icons.Material.Filled.AddCircle">Credit Wallet</MudMenuItem>
+                            <MudMenuItem OnClick="@(async () => await OpenManageWalletDialog(context, "Debit"))" Icon="@Icons.Material.Filled.RemoveCircle">Reduce Wallet</MudMenuItem>
+                            <MudMenuItem OnClick="() => OpenUpdateCategoryDialog(context)" Icon="@Icons.Material.Filled.Category">Change Level</MudMenuItem>
+                            
+                            @if (context.Status == UserStatus.Active)
+                            {
+                                <MudMenuItem OnClick="() => ToggleSuspend(context, true)" Icon="@Icons.Material.Filled.Block" Style="color: orange;">Inactive</MudMenuItem>
+                            }
+                            else
+                            {
+                                <MudMenuItem OnClick="() => ToggleSuspend(context, false)" Icon="@Icons.Material.Filled.CheckCircle" Style="color: green;">Activate</MudMenuItem>
+                            }
+                            
+                            <MudMenuItem OnClick="() => ResetPassword(context)" Icon="@Icons.Material.Filled.LockReset">Reset Password</MudMenuItem>
+                            <MudMenuItem OnClick="async () => await ViewPlayerHistory(context)" Icon="@Icons.Material.Filled.History">View History</MudMenuItem>
+                            
+                            @if (Session.CurrentUser?.Role == UserRole.SuperAdmin)
+                            {
+                                <MudDivider />
+                                <MudMenuItem OnClick="() => DeletePlayer(context)" Icon="@Icons.Material.Filled.Delete" Style="color: red;">Delete Player</MudMenuItem>
+                            }
+                        </MudMenu>
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <div class="pa-10 text-center">
+                        <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Large" Color="Color.Secondary" Class="mb-2" />
+                        <MudText Typo="Typo.h6" Class="mud-text-secondary">No Players Registered</MudText>
+                    </div>
+                </NoRecordsContent>
+                <PagerContent>
+                    <MudTablePager />
+                </PagerContent>
+            </MudTable>
+        </MudPaper>
+    }
+</MudContainer>
+
+<!-- ONBOARD PLAYER DIALOG -->
+<MudDialog @bind-Visible="_onboardVisible" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6" Class="font-weight-bold">@(_isEdit ? "Edit Player" : "Onboard New Player")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="d-flex flex-column gap-4 pa-2">
+            <MudTextField @bind-Value="_newPlayer.FullName" Label="Full Name" Required="true" Variant="Variant.Outlined" ShrinkLabel="true" />
+            <MudTextField @bind-Value="_newPlayer.PhoneNumber" Label="Mobile Number" Required="true" Variant="Variant.Outlined" ShrinkLabel="true" HelperText="Used as Mobile/Login username" />
+            <MudTextField @bind-Value="_newPlayer.Email" Label="Optional Email Address" Variant="Variant.Outlined" ShrinkLabel="true" />
+            <MudSelect T="PlayerCategory" @bind-Value="_newPlayerCategory" Label="Player Category Level" Variant="Variant.Outlined">
+                <MudSelectItem Value="PlayerCategory.Advanced">Advanced</MudSelectItem>
+                <MudSelectItem Value="PlayerCategory.Intermediate">Intermediate</MudSelectItem>
+                <MudSelectItem Value="PlayerCategory.Plus">Plus</MudSelectItem>
+            </MudSelect>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _onboardVisible = false">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveOnboardedPlayer" Style="background-color: #1877F2;">@(_isEdit ? "Save Changes" : "Create Player Account")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<!-- CREDENTIALS DISPLAY DIALOG -->
+<MudDialog @bind-Visible="_credentialsVisible" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6" Class="font-weight-bold" Color="Color.Success">Account Created Successfully</MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="d-flex flex-column gap-4 pa-2">
+            <div>
+                <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">Mobile / Username:</MudText>
+                <MudText Typo="Typo.h6" Class="font-weight-bold">@_createdMobile</MudText>
+            </div>
+            <div>
+                <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">Temporary Password:</MudText>
+                <MudText Typo="Typo.h6" Class="font-weight-bold" Style="font-family: monospace;">@_createdPassword</MudText>
+            </div>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="CopyMobile" Style="text-transform: none;">Copy Mobile Number</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="CopyPassword" Style="text-transform: none;">Copy Password</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => _credentialsVisible = false">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<!-- MANAGE WALLET DIALOG -->
+<MudDialog @bind-Visible="_walletVisible" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6" Class="font-weight-bold">Manage Wallet: @_selectedPlayer?.FullName</MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="d-flex flex-column gap-4 pa-2">
+            <MudSelect T="string" @bind-Value="_walletAction" Label="Action" Variant="Variant.Outlined">
+                <MudSelectItem Value='"Credit"'>Credit (Add Funds)</MudSelectItem>
+                <MudSelectItem Value='"Debit"'>Debit (Reduce Funds)</MudSelectItem>
+            </MudSelect>
+            <MudNumericField @bind-Value="_walletAmount" Label="Amount ($)" Format="N2" Min="0.01m" Required="true" Variant="Variant.Outlined" />
+            <MudTextField @bind-Value="_walletDescription" Label="Reference / Description" Required="true" Variant="Variant.Outlined" Placeholder="e.g. Received Cash payment" />
+
+            <MudText Typo="Typo.subtitle2" Class="mt-4 font-weight-bold">Transaction History</MudText>
+            <div style="max-height: 200px; overflow-y: auto;">
+                @if (_walletHistory.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary text-center">No transactions found.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Hover="true">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var tx in _walletHistory)
+                            {
+                                <tr>
+                                    <td>@tx.Timestamp.ToLocalTime()</td>
+                                    <td>@tx.Type</td>
+                                    <td class="@(tx.Amount >= 0 ? "text-success" : "text-error")">@tx.Amount.ToString("C")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </div>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _walletVisible = false">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="@(_walletAction == "Credit" ? Color.Success : Color.Error)" OnClick="SaveWalletTransaction" Style="@(_walletAction == "Credit" ? "background-color: #42b72a;" : "background-color: #F02849;")">Apply</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<!-- CHANGE CATEGORY DIALOG -->
+<MudDialog @bind-Visible="_changeCategoryVisible" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6" Class="font-weight-bold">Update Player Level: @_selectedPlayer?.FullName</MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="d-flex flex-column gap-4 pa-2">
+            <MudSelect T="PlayerCategory" @bind-Value="_selectedPlayerCategory" Label="New Category Level" Variant="Variant.Outlined">
+                <MudSelectItem Value="PlayerCategory.Advanced">Advanced</MudSelectItem>
+                <MudSelectItem Value="PlayerCategory.Intermediate">Intermediate</MudSelectItem>
+                <MudSelectItem Value="PlayerCategory.Plus">Plus</MudSelectItem>
+            </MudSelect>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _changeCategoryVisible = false">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SavePlayerCategoryUpdate" Style="background-color: #1877F2;">Update Category</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<!-- VIEW HISTORY DIALOG -->
+<MudDialog @bind-Visible="_historyVisible" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6" Class="font-weight-bold">Activity History: @_selectedPlayer?.FullName</MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="d-flex flex-column gap-4 pa-2" style="max-height: 400px; overflow-y: auto;">
+            <MudText Typo="Typo.subtitle2" Class="font-weight-bold">Activity Log Entries</MudText>
+            @if (_playerLogs.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary text-center">No logs found.</MudText>
+            }
+            else
+            {
+                <MudList T="string" Dense="true">
+                    @foreach (var log in _playerLogs)
+                    {
+                        <MudListItem>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">[@log.Timestamp.ToLocalTime()]</MudText>
+                            <MudText Typo="Typo.body2"><strong>@log.Action</strong>: @log.Description</MudText>
+                        </MudListItem>
+                    }
+                </MudList>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => _historyVisible = false" Style="background-color: #1877F2;">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@inject Microsoft.AspNetCore.Identity.UserManager<ApplicationUser> UserManager
+@inject IDialogService DialogService
+
+@code {
+    private bool _loading = true;
+    private List<ApplicationUser> _playersList = new();
+    private string _searchString = "";
+    private DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+    // Onboard/Edit properties
+    private bool _onboardVisible;
+    private bool _isEdit;
+    private ApplicationUser _newPlayer = new();
+    private PlayerCategory _newPlayerCategory = PlayerCategory.Intermediate;
+
+    // Credentials popup properties
+    private bool _credentialsVisible;
+    private string _createdMobile = "";
+    private string _createdPassword = "";
+
+    // Credit properties
+    private bool _walletVisible;
+    private ApplicationUser? _selectedPlayer;
+    private decimal _walletAmount = 50.00m;
+    private string _walletDescription = "Cash Top-up";
+    private string _walletAction = "Credit";
+    private List<WalletTransaction> _walletHistory = new();
+
+    // Change category properties
+    private bool _changeCategoryVisible;
+    private PlayerCategory _selectedPlayerCategory;
+
+    // History properties
+    private bool _historyVisible;
+    private List<ActivityLog> _playerLogs = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Enforce organizer or admin roles
+        if (!Session.IsLoggedIn || (Session.CurrentUser?.Role != UserRole.Organizer && Session.CurrentUser?.Role != UserRole.SuperAdmin))
+        {
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        await LoadPlayersAsync();
+    }
+
+    private async Task LoadPlayersAsync()
+    {
+        try
+        {
+            _loading = true;
+            // Create a scope to avoid sharing the scoped DbContext across the circuit's concurrent operations
+            using var scope = appServices.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+            _playersList = await db.Users
+                .Where(u => u.Role == UserRole.Player && !u.IsDeleted)
+                .OrderBy(u => u.FullName)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load players: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private bool FilterFunc(ApplicationUser element)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString))
+            return true;
+        if (element.FullName.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (element.PhoneNumber != null && element.PhoneNumber.Contains(_searchString))
+            return true;
+        return false;
+    }
+
+    private void OpenOnboardDialog()
+    {
+        _isEdit = false;
+        _newPlayer = new ApplicationUser();
+        _newPlayerCategory = PlayerCategory.Intermediate;
+        _onboardVisible = true;
+    }
+
+    private void OpenEditPlayerDialog(ApplicationUser player)
+    {
+        _isEdit = true;
+        _newPlayer = player;
+        _newPlayerCategory = player.Category ?? PlayerCategory.Intermediate;
+        _onboardVisible = true;
+    }
+
+    @inject IJSRuntime JSRuntime
+
+    private async Task CopyMobile()
+    {
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", _createdMobile);
+        Snackbar.Add("Mobile number copied to clipboard!", Severity.Success);
+    }
+
+    private async Task CopyPassword()
+    {
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", _createdPassword);
+        Snackbar.Add("Temporary password copied to clipboard!", Severity.Success);
+    }
+
+    private async Task SaveOnboardedPlayer()
+    {
+        if (string.IsNullOrWhiteSpace(_newPlayer.FullName) || string.IsNullOrWhiteSpace(_newPlayer.PhoneNumber))
+        {
+            Snackbar.Add("Please enter all required player information.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            if (_isEdit)
+            {
+                var player = await UserManager.FindByIdAsync(_newPlayer.Id.ToString());
+                if (player != null)
+                {
+                    player.FullName = _newPlayer.FullName;
+                    player.PhoneNumber = _newPlayer.PhoneNumber;
+                    player.UserName = _newPlayer.PhoneNumber;
+                    player.Email = _newPlayer.Email;
+                    player.Category = _newPlayerCategory;
+                    
+                    var result = await UserManager.UpdateAsync(player);
+                    if (result.Succeeded)
+                    {
+                        var log = new ActivityLog
+                        {
+                            Id = Guid.NewGuid(),
+                            UserId = player.Id,
+                            Action = "Player Updated",
+                            Description = $"Player {player.FullName} details updated by {Session.CurrentUser?.FullName}.",
+                            Timestamp = DateTime.Now,
+                            CreatedDate = DateTime.Now
+                        };
+                        DbContext.ActivityLogs.Add(log);
+                        await DbContext.SaveChangesAsync(default);
+
+                        Snackbar.Add("Player updated successfully.", Severity.Success);
+                    }
+                    else
+                    {
+                        var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                        throw new Exception(errors);
+                    }
+                }
+            }
+            else
+            {
+                var command = new BadmintonHub.Application.Features.Players.Commands.CreatePlayer.CreatePlayerCommand
+                {
+                    FullName = _newPlayer.FullName,
+                    MobileNumber = _newPlayer.PhoneNumber,
+                    Email = _newPlayer.Email,
+                    Category = _newPlayerCategory
+                };
+
+                await Mediator.Send(command);
+                var tempPassword = "Temp" + _newPlayer.PhoneNumber.Substring(Math.Max(0, _newPlayer.PhoneNumber.Length - 4)) + "!";
+                
+                _createdMobile = _newPlayer.PhoneNumber;
+                _createdPassword = tempPassword;
+                _credentialsVisible = true;
+                
+                Snackbar.Add($"Player onboarded successfully!", Severity.Success);
+            }
+            
+            _onboardVisible = false;
+            await LoadPlayersAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task OpenManageWalletDialog(ApplicationUser player, string action)
+    {
+        _selectedPlayer = player;
+        _walletAmount = 50.00m;
+        _walletAction = action;
+        _walletDescription = action == "Credit" ? "Cash Top-up" : "Manual deduction";
+        
+        using var scope = appServices.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+        _walletHistory = await db.WalletTransactions
+            .Where(w => w.PlayerId == player.Id)
+            .OrderByDescending(w => w.Timestamp)
+            .ToListAsync();
+
+        _walletVisible = true;
+    }
+
+    private async Task SaveWalletTransaction()
+    {
+        if (_selectedPlayer == null || _walletAmount <= 0 || string.IsNullOrWhiteSpace(_walletDescription))
+        {
+            Snackbar.Add("Please enter valid amount and references.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            using var scope = appServices.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+            var player = await UserManager.FindByIdAsync(_selectedPlayer.Id.ToString());
+            
+            if (player != null)
+            {
+                if (_walletAction == "Debit")
+                {
+                    if (player.WalletBalance - _walletAmount < 0)
+                    {
+                        Snackbar.Add("Deduction amount exceeds current balance.", Severity.Error);
+                        return;
+                    }
+                    player.WalletBalance -= _walletAmount;
+                }
+                else
+                {
+                    player.WalletBalance += _walletAmount;
+                }
+
+                var tx = new WalletTransaction
+                {
+                    Id = Guid.NewGuid(),
+                    PlayerId = player.Id,
+                    Amount = _walletAction == "Credit" ? _walletAmount : -_walletAmount,
+                    Type = _walletAction == "Credit" ? WalletTransactionType.Credit : WalletTransactionType.Debit,
+                    Description = _walletDescription,
+                    Timestamp = DateTime.Now,
+                    CreatedDate = DateTime.Now
+                };
+
+                db.WalletTransactions.Add(tx);
+                await UserManager.UpdateAsync(player);
+                await db.SaveChangesAsync(default);
+
+                Snackbar.Add($"Wallet {_walletAction.ToLower()}ed successfully by {_walletAmount:C}.", Severity.Success);
+                _walletVisible = false;
+                await LoadPlayersAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private void OpenUpdateCategoryDialog(ApplicationUser player)
+    {
+        _selectedPlayer = player;
+        _selectedPlayerCategory = player.Category ?? PlayerCategory.Intermediate;
+        _changeCategoryVisible = true;
+    }
+
+    private void OpenChangeCategoryDialog(ApplicationUser player) => OpenUpdateCategoryDialog(player);
+
+    private async Task SavePlayerCategoryUpdate()
+    {
+        if (_selectedPlayer == null) return;
+
+        try
+        {
+            var command = new UpdatePlayerCategoryCommand
+            {
+                PlayerId = _selectedPlayer.Id,
+                NewCategory = _selectedPlayerCategory
+            };
+
+            await Mediator.Send(command);
+            Snackbar.Add("Player skill category level updated and audited.", Severity.Success);
+            _changeCategoryVisible = false;
+            await LoadPlayersAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task ToggleSuspend(ApplicationUser user, bool suspend)
+    {
+        try
+        {
+            user.Status = suspend ? UserStatus.Suspended : UserStatus.Active;
+            await UserManager.UpdateAsync(user);
+
+            var log = new ActivityLog
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                Action = suspend ? "Player Marked Inactive" : "Player Marked Active",
+                Description = $"Player {user.FullName} status set to {user.Status} by {Session.CurrentUser?.FullName}.",
+                Timestamp = DateTime.Now,
+                CreatedDate = DateTime.Now
+            };
+            DbContext.ActivityLogs.Add(log);
+            await DbContext.SaveChangesAsync(default);
+
+            Snackbar.Add(suspend ? "Player account marked inactive." : "Player account marked active.", Severity.Info);
+            await LoadPlayersAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task ResetPassword(ApplicationUser user)
+    {
+        try
+        {
+            var dbUser = await UserManager.FindByIdAsync(user.Id.ToString());
+            if (dbUser == null) throw new Exception("User not found.");
+
+            var token = await UserManager.GeneratePasswordResetTokenAsync(dbUser);
+            var tempPassword = "TempPlayerReset123!";
+            var result = await UserManager.ResetPasswordAsync(dbUser, token, tempPassword);
+            if (result.Succeeded)
+            {
+                dbUser.Status = UserStatus.PendingActivation;
+                await UserManager.UpdateAsync(dbUser);
+
+                var log = new ActivityLog
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = dbUser.Id,
+                    Action = "Password Reset",
+                    Description = $"Player password reset by {Session.CurrentUser?.FullName}. Temp Password: {tempPassword}",
+                    Timestamp = DateTime.Now,
+                    CreatedDate = DateTime.Now
+                };
+
+                using var scope = appServices.CreateScope();
+                var scopedDb = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+                scopedDb.ActivityLogs.Add(log);
+                await scopedDb.SaveChangesAsync(default);
+
+                Snackbar.Add($"Password reset successfully. Temp Password: {tempPassword}", Severity.Success);
+                await LoadPlayersAsync();
+            }
+            else
+            {
+                var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                throw new Exception(errors);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Password reset failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeletePlayer(ApplicationUser user)
+    {
+        bool? result = await DialogService.ShowMessageBoxAsync(
+            "Delete Player",
+            $"Are you sure you want to delete {user.FullName}? This action is irreversible.",
+            yesText: "Delete!", cancelText: "Cancel");
+
+        if (result == true)
+        {
+            try
+            {
+                var target = await UserManager.FindByIdAsync(user.Id.ToString());
+                if (target != null)
+                {
+                    target.IsDeleted = true;
+                    target.DeletedDate = DateTime.Now;
+                    target.DeletedBy = Session.CurrentUser?.Id.ToString() ?? "System";
+
+                    var updateResult = await UserManager.UpdateAsync(target);
+                    if (updateResult.Succeeded)
+                    {
+                        using var scope = appServices.CreateScope();
+                        var db = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+                        var log = new ActivityLog
+                        {
+                            Id = Guid.NewGuid(),
+                            UserId = Session.CurrentUser?.Id ?? Guid.Empty,
+                            Action = "Player Deleted",
+                            Description = $"Player {user.FullName} ({user.PhoneNumber}) deleted by {Session.CurrentUser?.FullName}.",
+                            Timestamp = DateTime.Now,
+                            CreatedDate = DateTime.Now
+                        };
+                        db.ActivityLogs.Add(log);
+                        await db.SaveChangesAsync(default);
+
+                        Snackbar.Add("Player deleted successfully.", Severity.Success);
+                        await LoadPlayersAsync();
+                    }
+                    else
+                    {
+                        var errors = string.Join(", ", updateResult.Errors.Select(e => e.Description));
+                        throw new Exception(errors);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(ex.Message, Severity.Error);
+            }
+        }
+    }
+
+    private async Task ViewPlayerHistory(ApplicationUser user)
+    {
+        _selectedPlayer = user;
+        _playerLogs = await DbContext.ActivityLogs
+            .Where(l => l.UserId == user.Id)
+            .OrderByDescending(l => l.Timestamp)
+            .ToListAsync();
+        _historyVisible = true;
+    }
+}

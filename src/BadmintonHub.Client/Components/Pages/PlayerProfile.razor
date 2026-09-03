@@ -1,0 +1,66 @@
+@page "/player/profile"
+@layout MainLayout
+@inject BadmintonHub.Client.Services.UserSession Session
+@inject NavigationManager Navigation
+
+<PageTitle>My Profile - Badminton Hub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-4">
+    <div class="mb-6">
+        <MudText Typo="Typo.h4" Style="font-family: 'Outfit', sans-serif; font-weight: bold; color: #1c1e21;">
+            My Profile
+        </MudText>
+        <MudText Typo="Typo.body1" Class="mud-text-secondary">
+            Manage your personal profile details and category levels.
+        </MudText>
+    </div>
+
+    @if (Session.CurrentUser != null)
+    {
+        <MudPaper Elevation="2" Style="border-radius: 12px;" Class="pa-6">
+            <div class="d-flex flex-column align-items-center mb-6">
+                <MudAvatar Color="Color.Primary" Size="Size.Large" Class="mb-3">
+                    @Session.CurrentUser.FullName.Substring(0, Math.Min(2, Session.CurrentUser.FullName.Length)).ToUpper()
+                </MudAvatar>
+                <MudText Typo="Typo.h5" Class="font-weight-bold">@Session.CurrentUser.FullName</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">@Session.CurrentUser.Role Account</MudText>
+            </div>
+
+            <div class="d-flex flex-column gap-4">
+                <div class="d-flex justify-content-between">
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Mobile Number (Username)</MudText>
+                    <MudText Typo="Typo.body2" Class="font-weight-bold">@Session.CurrentUser.PhoneNumber</MudText>
+                </div>
+                <MudDivider />
+                <div class="d-flex justify-content-between">
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Email</MudText>
+                    <MudText Typo="Typo.body2" Class="font-weight-bold">@(string.IsNullOrEmpty(Session.CurrentUser.Email) ? "N/A" : Session.CurrentUser.Email)</MudText>
+                </div>
+                <MudDivider />
+                <div class="d-flex justify-content-between">
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Skill Classification</MudText>
+                    <MudChip T="string" Color="Color.Primary" Size="Size.Small">
+                        @(Session.CurrentUser.Category?.ToString() ?? "Not Assigned")
+                    </MudChip>
+                </div>
+                <MudDivider />
+                <div class="d-flex justify-content-between">
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Account Status</MudText>
+                    <MudChip T="string" Color="Color.Success" Size="Size.Small">
+                        @Session.CurrentUser.Status
+                    </MudChip>
+                </div>
+            </div>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    protected override void OnInitialized()
+    {
+        if (!Session.IsLoggedIn || Session.CurrentUser?.Role != UserRole.Player)
+        {
+            Navigation.NavigateTo("/dashboard");
+        }
+    }
+}

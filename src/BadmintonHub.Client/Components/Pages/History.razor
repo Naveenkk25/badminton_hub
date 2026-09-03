@@ -1,0 +1,228 @@
+@page "/events/history"
+@layout MainLayout
+@inject BadmintonHub.Client.Services.UserSession Session
+@inject BadmintonHub.Application.Common.Interfaces.IApplicationDbContext DbContext
+@inject NavigationManager Navigation
+
+<PageTitle>Event History - Badminton Hub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <div class="mb-6">
+        <MudText Typo="Typo.h4" Style="font-family: 'Outfit', sans-serif; font-weight: bold; color: #1c1e21;">
+            Event History
+        </MudText>
+        <MudText Typo="Typo.body1" Class="mud-text-secondary">
+            Review past games, completions, and registration outcomes.
+        </MudText>
+    </div>
+
+    @if (Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.Player)
+    {
+        <!-- PLAYER VIEW: Upcoming Events & Participated Events History -->
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-6" Elevation="2" Style="border-radius: 12px; height: 100%;">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">Your Upcoming Bookings</MudText>
+                    @if (_playerUpcoming.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary text-center pa-4">No upcoming bookings.</MudText>
+                    }
+                    else
+                    {
+                        <MudTable Items="_playerUpcoming" Hover="true" Dense="true" Elevation="0">
+                            <HeaderContent>
+                                <th>Event</th>
+                                <th>Date / Time</th>
+                                <th>Venue</th>
+                                <th>Category</th>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <td><strong>@context.Event?.Name</strong></td>
+                                <td>@context.Event?.EventDate.ToShortDateString()</td>
+                                <td>@context.Event?.Venue</td>
+                                <td><MudChip T="string" Color="Color.Primary" Size="Size.Small">@context.Event?.Category</MudChip></td>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-6" Elevation="2" Style="border-radius: 12px; height: 100%;">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">Participated Games History</MudText>
+                    @if (_playerParticipated.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary text-center pa-4">No past registrations.</MudText>
+                    }
+                    else
+                    {
+                        <MudTable Items="_playerParticipated" Hover="true" Dense="true" Elevation="0">
+                            <HeaderContent>
+                                <th>Event</th>
+                                <th>Date</th>
+                                <th>Category</th>
+                                <th>Fee Paid</th>
+                                <th>Status</th>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <td><strong>@context.Event?.Name</strong></td>
+                                <td>@context.Event?.EventDate.ToShortDateString()</td>
+                                <td><MudChip T="string" Color="Color.Primary" Size="Size.Small">@context.Event?.Category</MudChip></td>
+                                <td>@context.FeePaid.ToString("C")</td>
+                                <td>
+                                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled">Completed</MudChip>
+                                </td>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+    else if (Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.Organizer)
+    {
+        <!-- ORGANIZER VIEW: Upcoming Events & Completed Events History -->
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-6" Elevation="2" Style="border-radius: 12px; height: 100%;">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">Upcoming Scheduled Events</MudText>
+                    @if (_organizerUpcoming.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary text-center pa-4">No upcoming events scheduled.</MudText>
+                    }
+                    else
+                    {
+                        <MudTable Items="_organizerUpcoming" Hover="true" Dense="true" Elevation="0">
+                            <HeaderContent>
+                                <th>Event</th>
+                                <th>Date</th>
+                                <th>Registrations</th>
+                                <th>Status</th>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <td><strong>@context.Name</strong></td>
+                                <td>@context.EventDate.ToShortDateString()</td>
+                                <td>@context.RegisteredPlayersCount / @context.MaxPlayers</td>
+                                <td><MudChip T="string" Color="Color.Success" Size="Size.Small">@context.Status</MudChip></td>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-6" Elevation="2" Style="border-radius: 12px; height: 100%;">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">Completed Events History</MudText>
+                    @if (_organizerCompleted.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary text-center pa-4">No completed events history.</MudText>
+                    }
+                    else
+                    {
+                        <MudTable Items="_organizerCompleted" Hover="true" Dense="true" Elevation="0">
+                            <HeaderContent>
+                                <th>Event</th>
+                                <th>Date</th>
+                                <th>Category</th>
+                                <th>Status</th>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <td><strong>@context.Name</strong></td>
+                                <td>@context.EventDate.ToShortDateString()</td>
+                                <td><MudChip T="string" Color="Color.Primary" Size="Size.Small">@context.Category</MudChip></td>
+                                <td>
+                                    <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled">Finished</MudChip>
+                                </td>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+    else if (Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.SuperAdmin)
+    {
+        <!-- SUPER ADMIN VIEW: All Event History -->
+        <MudPaper Class="pa-6" Elevation="2" Style="border-radius: 12px;">
+            <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">All System Event History</MudText>
+            <MudTable Items="_allEvents" Hover="true" Striped="true">
+                <HeaderContent>
+                    <th>Event Name</th>
+                    <th>Venue</th>
+                    <th>Date</th>
+                    <th>Category</th>
+                    <th>Bookings</th>
+                    <th>Status</th>
+                </HeaderContent>
+                <RowTemplate>
+                    <td><strong>@context.Name</strong></td>
+                    <td>@context.Venue</td>
+                    <td>@context.EventDate.ToShortDateString()</td>
+                    <td><MudChip T="string" Color="Color.Primary" Size="Size.Small">@context.Category</MudChip></td>
+                    <td>@context.RegisteredPlayersCount / @context.MaxPlayers</td>
+                    <td>
+                        <MudChip T="string" Color="@(context.EventDate >= DateTime.Now.Date ? Color.Success : Color.Info)" Size="Size.Small" Variant="Variant.Filled">
+                            @(context.EventDate >= DateTime.Now.Date ? "Upcoming" : "Completed")
+                        </MudChip>
+                    </td>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    private List<Registration> _playerUpcoming = new();
+    private List<Registration> _playerParticipated = new();
+
+    private List<Event> _organizerUpcoming = new();
+    private List<Event> _organizerCompleted = new();
+
+    private List<Event> _allEvents = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsLoggedIn)
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        var today = DateTime.Now.Date;
+
+        if (Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.Player)
+        {
+            var playerId = Session.CurrentUser.Id;
+            
+            _playerUpcoming = await DbContext.Registrations
+                .Include(r => r.Event)
+                .Where(r => r.PlayerId == playerId && !r.IsCancelled && r.Event!.EventDate >= today)
+                .OrderBy(r => r.Event!.EventDate)
+                .ToListAsync();
+
+            _playerParticipated = await DbContext.Registrations
+                .Include(r => r.Event)
+                .Where(r => r.PlayerId == playerId && !r.IsCancelled && r.Event!.EventDate < today)
+                .OrderByDescending(r => r.Event!.EventDate)
+                .ToListAsync();
+        }
+        else if (Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.Organizer)
+        {
+            _organizerUpcoming = await DbContext.Events
+                .Where(e => e.EventDate >= today)
+                .OrderBy(e => e.EventDate)
+                .ToListAsync();
+
+            _organizerCompleted = await DbContext.Events
+                .Where(e => e.EventDate < today)
+                .OrderByDescending(e => e.EventDate)
+                .ToListAsync();
+        }
+        else if (Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.SuperAdmin)
+        {
+            _allEvents = await DbContext.Events
+                .OrderByDescending(e => e.EventDate)
+                .ToListAsync();
+        }
+    }
+}

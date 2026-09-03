@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: badminton-hub-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile.backend
+    plan: free
+    region: singapore
+    healthCheckPath: /health
+    envVars:
+      - key: UsePostgres
+        value: "true"
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      - key: JwtSettings__Secret
+        generateValue: true
+      - key: JwtSettings__Issuer
+        value: BadmintonHub
+      - key: JwtSettings__Audience
+        value: BadmintonHubPlayers

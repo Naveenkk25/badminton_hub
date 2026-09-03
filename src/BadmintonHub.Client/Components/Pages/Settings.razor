@@ -1,0 +1,54 @@
+@page "/manage/settings"
+@layout MainLayout
+@inject BadmintonHub.Client.Services.UserSession Session
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>System Settings - Badminton Hub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
+    <div class="mb-6">
+        <MudText Typo="Typo.h4" Style="font-family: 'Outfit', sans-serif; font-weight: bold; color: #1c1e21;">
+            System Settings
+        </MudText>
+        <MudText Typo="Typo.body1" Class="mud-text-secondary">
+            Configure system rules, credit parameters, and defaults.
+        </MudText>
+    </div>
+
+    <MudGrid>
+        <MudItem xs="12">
+            <MudPaper Class="pa-6" Elevation="2" Style="border-radius: 12px;">
+                <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">Event Credit Configuration</MudText>
+                <div class="d-flex flex-column gap-4">
+                    <MudNumericField T="int" Value="1" Disabled="true" Label="Credits consumed per Event creation" Variant="Variant.Outlined" />
+                    <MudNumericField T="int" Value="1" Disabled="true" Label="Free credits granted to new Organizers" Variant="Variant.Outlined" />
+                    
+                    <MudDivider Class="my-4" />
+                    
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">PWA Sync Settings</MudText>
+                    <MudSwitch T="bool" Value="true" Color="Color.Primary" Label="Service worker caching enabled" Disabled="true" />
+                    
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Style="background-color: #1877F2; text-transform: none;" OnClick="SaveSettings">
+                        Save Configurations
+                    </MudButton>
+                </div>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    protected override void OnInitialized()
+    {
+        if (!Session.IsLoggedIn || Session.CurrentUser?.Role != UserRole.SuperAdmin)
+        {
+            Navigation.NavigateTo("/dashboard");
+        }
+    }
+
+    private void SaveSettings()
+    {
+        Snackbar.Add("Settings saved successfully.", Severity.Success);
+    }
+}

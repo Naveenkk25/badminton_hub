@@ -1,0 +1,23 @@
+@using System.Net.Http
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@using Microsoft.AspNetCore.Components.Web.Virtualization
+@using Microsoft.JSInterop
+@using BadmintonHub.Client
+@using BadmintonHub.Client.Components
+@using BadmintonHub.Client.Components.Layout
+@using BadmintonHub.Domain.Entities
+@using BadmintonHub.Domain.Enums
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor
+@using BadmintonHub.Application.Features.Events.Queries.GetEventDetails
+@using BadmintonHub.Application.Features.Events.Commands.CreateEvent
+@using BadmintonHub.Application.Features.Events.Commands.RegisterPlayer
+@using BadmintonHub.Application.Features.Events.Commands.CancelRegistration
+@using BadmintonHub.Application.Features.Players.Commands.UpdatePlayerCategory
+@using BadmintonHub.Application.Features.Wallet.Commands.CreditWallet
+@using Microsoft.Extensions.DependencyInjection
+@using BadmintonHub.Application.Common.Interfaces

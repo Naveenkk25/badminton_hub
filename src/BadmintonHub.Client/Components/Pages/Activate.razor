@@ -1,0 +1,140 @@
+@page "/activate"
+@layout MainLayout
+@inject MediatR.ISender Mediator
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Activate Account - Badminton Hub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
+    <MudPaper Elevation="3" Class="pa-8 d-flex flex-column align-items-center" Style="border-radius: 12px; background-color: #ffffff;">
+        <MudIcon Icon="@Icons.Material.Filled.Security" Color="Color.Secondary" Size="Size.Large" Class="mb-4" />
+        <MudText Typo="Typo.h5" Class="font-weight-bold mb-2" Style="color: #1c1e21; font-family: 'Outfit', sans-serif;">Account Activation</MudText>
+        <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary mb-6">First-time users must change their temporary password to activate their account.</MudText>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="mb-4 w-100" Style="border-radius: 8px;">
+                @_errorMessage
+            </MudAlert>
+        }
+
+        <EditForm Model="@_activationModel" OnValidSubmit="ExecuteActivation" Class="w-100">
+            <MudTextField @bind-Value="_activationModel.MobileNumber" 
+                          Label="Mobile Number" 
+                          Variant="Variant.Outlined" 
+                          Required="true"
+                          ShrinkLabel="true"
+                          Class="mb-4" />
+                          
+            <MudTextField @bind-Value="_activationModel.TemporaryPassword" 
+                          Label="Temporary Password" 
+                          Variant="Variant.Outlined" 
+                          InputType="InputType.Password" 
+                          Required="true"
+                          ShrinkLabel="true"
+                          Class="mb-4" />
+
+            <MudTextField @bind-Value="_activationModel.NewPassword" 
+                          Label="New Password" 
+                          Variant="Variant.Outlined" 
+                          InputType="InputType.Password" 
+                          Required="true"
+                          ShrinkLabel="true"
+                          Class="mb-4" />
+
+            <MudTextField @bind-Value="_activationModel.ConfirmPassword" 
+                          Label="Confirm Password" 
+                          Variant="Variant.Outlined" 
+                          InputType="InputType.Password" 
+                          Required="true"
+                          ShrinkLabel="true"
+                          Class="mb-6" />
+
+            <MudButton ButtonType="ButtonType.Submit" 
+                       Variant="Variant.Filled" 
+                       Color="Color.Secondary" 
+                       FullWidth="true" 
+                       Size="Size.Large"
+                       Style="border-radius: 8px; text-transform: none; font-weight: bold; background-color: #42b72a;">
+                Activate Account
+            </MudButton>
+        </EditForm>
+
+        <MudButton Variant="Variant.Text" 
+                   Color="Color.Primary" 
+                   Class="mt-4" 
+                   OnClick="GoToLogin">
+            Back to Login
+        </MudButton>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private ActivationViewModel _activationModel = new();
+    private string? _errorMessage;
+
+    private async Task ExecuteActivation()
+    {
+        _errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(_activationModel.MobileNumber) || 
+            string.IsNullOrWhiteSpace(_activationModel.TemporaryPassword) || 
+            string.IsNullOrWhiteSpace(_activationModel.NewPassword) || 
+            string.IsNullOrWhiteSpace(_activationModel.ConfirmPassword))
+        {
+            _errorMessage = "All fields are required.";
+            return;
+        }
+
+        if (_activationModel.NewPassword != _activationModel.ConfirmPassword)
+        {
+            _errorMessage = "New password and confirm password do not match.";
+            return;
+        }
+
+        if (_activationModel.NewPassword.Length < 6)
+        {
+            _errorMessage = "New password must be at least 6 characters long.";
+            return;
+        }
+
+        try
+        {
+            var command = new BadmintonHub.Application.Features.Players.Commands.ActivatePlayer.ActivatePlayerCommand
+            {
+                MobileNumber = _activationModel.MobileNumber,
+                CurrentPassword = _activationModel.TemporaryPassword,
+                NewPassword = _activationModel.NewPassword
+            };
+
+            var success = await Mediator.Send(command);
+            if (success)
+            {
+                Snackbar.Add("Account activated successfully! Please log in with your new password.", Severity.Success);
+                Navigation.NavigateTo("/login");
+            }
+            else
+            {
+                _errorMessage = "Failed to activate account. Verify mobile number and temporary password.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private void GoToLogin()
+    {
+        Navigation.NavigateTo("/login");
+    }
+
+    public class ActivationViewModel
+    {
+        public string MobileNumber { get; set; } = string.Empty;
+        public string TemporaryPassword { get; set; } = string.Empty;
+        public string NewPassword { get; set; } = string.Empty;
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+}

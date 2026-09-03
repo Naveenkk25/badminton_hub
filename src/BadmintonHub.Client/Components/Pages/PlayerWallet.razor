@@ -1,0 +1,91 @@
+@page "/player/wallet"
+@layout MainLayout
+@inject BadmintonHub.Client.Services.UserSession Session
+@inject BadmintonHub.Application.Common.Interfaces.IApplicationDbContext DbContext
+@inject NavigationManager Navigation
+
+<PageTitle>My Wallet - Badminton Hub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
+    <div class="mb-6">
+        <MudText Typo="Typo.h4" Style="font-family: 'Outfit', sans-serif; font-weight: bold; color: #1c1e21;">
+            My Wallet Transactions
+        </MudText>
+        <MudText Typo="Typo.body1" Class="mud-text-secondary">
+            View running balance calculations and immutable transaction ledger items.
+        </MudText>
+    </div>
+
+    <MudGrid>
+        <!-- Balance Card -->
+        <MudItem xs="12">
+            <MudPaper Class="pa-6 d-flex align-items-center justify-content-between" Elevation="2" Style="border-radius: 12px; background-color: #ffffff;">
+                <div class="d-flex align-items-center">
+                    <MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Color="Color.Primary" Size="Size.Large" Class="mr-4" />
+                    <div>
+                        <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">CURRENT BALANCE</MudText>
+                        <MudText Typo="Typo.h3" Color="Color.Primary" Class="font-weight-bold">
+                            @Session.CurrentUser?.WalletBalance.ToString("C")
+                        </MudText>
+                    </div>
+                </div>
+            </MudPaper>
+        </MudItem>
+
+        <!-- Ledger Table -->
+        <MudItem xs="12">
+            <MudPaper Elevation="2" Style="border-radius: 12px;" Class="pa-4">
+                <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">Transaction History</MudText>
+                @if (_transactions.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary text-center pa-4">No transactions found.</MudText>
+                }
+                else
+                {
+                    <MudTable Items="_transactions" Hover="true" Striped="true">
+                        <HeaderContent>
+                            <th>Date / Time</th>
+                            <th>Description</th>
+                            <th>Type</th>
+                            <th>Amount</th>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <td>@context.Timestamp.ToLocalTime().ToString("g")</td>
+                            <td>@context.Description</td>
+                            <td>
+                                <MudChip T="string" Color="@(context.Amount > 0 ? Color.Success : Color.Error)" Size="Size.Small" Variant="Variant.Text">
+                                    @context.Type
+                                </MudChip>
+                            </td>
+                            <td>
+                                <MudText Color="@(context.Amount > 0 ? Color.Success : Color.Error)" Class="font-weight-bold">
+                                    @(context.Amount > 0 ? "+" : "")@context.Amount.ToString("C")
+                                </MudText>
+                            </td>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private List<WalletTransaction> _transactions = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsLoggedIn || Session.CurrentUser?.Role != UserRole.Player)
+        {
+            Navigation.NavigateTo("/dashboard");
+            return;
+        }
+
+        await Session.RefreshUserAsync();
+
+        _transactions = await DbContext.WalletTransactions
+            .Where(t => t.PlayerId == Session.CurrentUser.Id)
+            .OrderByDescending(t => t.Timestamp)
+            .ToListAsync();
+    }
+}

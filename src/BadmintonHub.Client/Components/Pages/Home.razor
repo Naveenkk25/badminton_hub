@@ -1,0 +1,17 @@
+@page "/"
+@inject NavigationManager Navigation
+@inject BadmintonHub.Client.Services.UserSession Session
+
+@code {
+    protected override void OnInitialized()
+    {
+        if (Session.IsLoggedIn)
+        {
+            Navigation.NavigateTo("/dashboard");
+        }
+        else
+        {
+            Navigation.NavigateTo("/login");
+        }
+    }
+}

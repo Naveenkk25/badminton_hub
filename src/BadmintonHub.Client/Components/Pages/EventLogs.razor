@@ -1,0 +1,112 @@
+@page "/manage/event-logs"
+@layout MainLayout
+@inject BadmintonHub.Client.Services.UserSession Session
+@inject BadmintonHub.Application.Common.Interfaces.IApplicationDbContext DbContext
+@inject NavigationManager Navigation
+@inject IServiceProvider appServices
+
+<PageTitle>Event Logs - Badminton Hub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <div class="page-header-container">
+        <div class="page-header-text">
+        <MudText Typo="Typo.h4" Style="font-family: 'Outfit', sans-serif; font-weight: bold; color: #1c1e21;">
+            Tournament Event Logs
+        </MudText>
+        <MudText Typo="Typo.body1" Class="mud-text-secondary">
+            Audit history of player check-ins, registrations, waitlists, and cancellations.
+        </MudText>
+    </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="d-flex justify-content-center align-items-center pa-10">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        </div>
+    }
+    else
+    {
+        <MudPaper Elevation="2" Style="border-radius: 12px;" Class="pa-4">
+            <MudTable Items="_activityLogs" Hover="true" Striped="true" FixedHeader="true" Height="500px">
+                <HeaderContent>
+                    <MudTh>Timestamp</MudTh>
+                    <MudTh>Operator</MudTh>
+                    <MudTh>Action</MudTh>
+                    <MudTh>Description</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Timestamp">@context.Timestamp.ToLocalTime().ToString("g")</MudTd>
+                    <MudTd DataLabel="Operator"><strong>@(context.User?.FullName ?? "System")</strong></MudTd>
+                    <MudTd DataLabel="Action"><MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Text">@context.Action</MudChip></MudTd>
+                    <MudTd DataLabel="Description">@context.Description</MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <div class="pa-10 text-center">
+                        <MudIcon Icon="@Icons.Material.Filled.EventNote" Size="Size.Large" Color="Color.Secondary" Class="mb-2" />
+                        <MudText Typo="Typo.h6" Class="mud-text-secondary">No Event logs found</MudText>
+                    </div>
+                </NoRecordsContent>
+                <PagerContent>
+                    <MudTablePager />
+                </PagerContent>
+            </MudTable>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    private bool _loading = true;
+    private List<ActivityLog> _activityLogs = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsLoggedIn || (Session.CurrentUser?.Role != UserRole.SuperAdmin && Session.CurrentUser?.Role != UserRole.Organizer))
+        {
+            Navigation.NavigateTo("/dashboard");
+            return;
+        }
+
+        try
+        {
+            _loading = true;
+            using var scope = appServices.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+            
+            var query = db.ActivityLogs
+                .Include(a => a.User)
+                .Include(a => a.Event)
+                .Where(a => a.Action.Contains("Event") || a.Action.Contains("Registration") || a.Action.Contains("Waitlist") || 
+                            a.Action.Contains("Booked") || a.Action.Contains("Wallet") || a.Action.Contains("Credit") ||
+                            a.Description.Contains("event") || a.Description.Contains("Event") || a.Description.Contains("credit") || 
+                            a.Description.Contains("Credit") || a.Description.Contains("wallet") || a.Description.Contains("Wallet"));
+
+            if (Session.CurrentUser?.Role == UserRole.Organizer)
+            {
+                var org = await db.Organizers.FirstOrDefaultAsync(o => o.ContactNumber == Session.CurrentUser.PhoneNumber);
+                if (org != null)
+                {
+                    var orgId = org.Id;
+                    var currentUserId = Session.CurrentUser.Id;
+                    query = query.Where(a => a.UserId == currentUserId || (a.Event != null && a.Event.OrganizerId == orgId));
+                }
+                else
+                {
+                    // Fallback to only their own user actions if org record missing
+                    var currentUserId = Session.CurrentUser.Id;
+                    query = query.Where(a => a.UserId == currentUserId);
+                }
+            }
+
+            _activityLogs = await query.OrderByDescending(a => a.Timestamp).ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading event logs: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

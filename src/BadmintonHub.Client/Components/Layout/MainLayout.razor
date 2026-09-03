@@ -1,0 +1,177 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@inject BadmintonHub.Client.Services.UserSession Session
+@inject ISnackbar Snackbar
+
+<MudThemeProvider Theme="MyCustomTheme" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<MudPopoverProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1" Color="Color.Primary" Dense="false">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="DrawerToggle" Class="mr-2" />
+        <MudIconButton Icon="@Icons.Material.Filled.SportsTennis" Color="Color.Inherit" />
+        <MudText Typo="Typo.h5" Class="ml-2 font-weight-bold" Style="font-family: 'Outfit', sans-serif; cursor: pointer;" @onclick='() => Navigation.NavigateTo("/dashboard")'>
+            <MudHidden Breakpoint="Breakpoint.Xs">Badminton Hub</MudHidden>
+            <MudHidden Breakpoint="Breakpoint.SmAndUp">Hub</MudHidden>
+        </MudText>
+        <MudSpacer />
+        
+        @if (Session.IsLoggedIn)
+        {
+            <div class="d-flex align-items-center gap-2">
+                @if (Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.Player)
+                {
+                    <MudHidden Breakpoint="Breakpoint.SmAndDown">
+                        <MudChip T="string" Color="Color.Secondary" Variant="Variant.Text" Icon="@Icons.Material.Filled.AccountBalanceWallet" Class="mr-2">
+                            Balance: @Session.CurrentUser.WalletBalance.ToString("C")
+                        </MudChip>
+                    </MudHidden>
+                }
+                <MudHidden Breakpoint="Breakpoint.SmAndDown">
+                    <MudText Typo="Typo.body1" Class="mr-4" Style="color: #ffffff;">
+                        Hi, <strong>@Session.CurrentUser?.FullName</strong>
+                    </MudText>
+                </MudHidden>
+                <MudButton Variant="Variant.Outlined" Color="Color.Inherit" OnClick="HandleLogout" Size="Size.Small" Style="text-transform: none; border-radius: 8px;">
+                    Logout
+                </MudButton>
+            </div>
+        }
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen" Variant="@DrawerVariant.Responsive" ClipMode="DrawerClipMode.Always" Elevation="1" Anchor="Anchor.Left" Width="240px">
+        <MudDrawerHeader Class="pa-4">
+            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary font-weight-bold">NAVIGATION</MudText>
+        </MudDrawerHeader>
+        <MudNavMenu>
+            @if (!Session.IsLoggedIn)
+            {
+                <!-- BEFORE LOGIN: SHOW ONLY LOGIN -->
+                <MudNavLink Href="/login" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Login">Login</MudNavLink>
+            }
+            else
+            {
+                <!-- AFTER LOGIN: ROLE-SPECIFIC MENU -->
+                @if (Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.SuperAdmin)
+                {
+                    <!-- SUPER ADMIN MENU -->
+                    <MudNavLink Href="/dashboard" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
+                    <MudNavLink Href="/manage/organizers" Icon="@Icons.Material.Filled.Business">Organizers</MudNavLink>
+                    <MudNavLink Href="/manage/players" Icon="@Icons.Material.Filled.People">Players</MudNavLink>
+                    <MudNavLink Href="/events" Icon="@Icons.Material.Filled.Event">Events</MudNavLink>
+                    <MudNavLink Href="/manage/reports" Icon="@Icons.Material.Filled.Assessment">Reports</MudNavLink>
+                    <MudNavLink Href="/manage/activity" Icon="@Icons.Material.Filled.ListAlt">Activity Logs</MudNavLink>
+                    <MudNavLink Href="/manage/event-logs" Icon="@Icons.Material.Filled.EventNote">Event Logs</MudNavLink>
+                    <MudNavLink Href="/manage/settings" Icon="@Icons.Material.Filled.Settings">System Settings</MudNavLink>
+                }
+                else if (Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.Organizer)
+                {
+                    <!-- ORGANIZER MENU -->
+                    <MudNavLink Href="/dashboard" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
+                    <MudNavLink Href="/manage/players" Icon="@Icons.Material.Filled.People">Players</MudNavLink>
+                    <MudNavLink Href="/events" Icon="@Icons.Material.Filled.Event">Events</MudNavLink>
+                    <MudNavLink Href="/manage/event-logs" Icon="@Icons.Material.Filled.EventNote">Event Logs</MudNavLink>
+                    <MudNavLink Href="/events/history" Icon="@Icons.Material.Filled.History">Event History</MudNavLink>
+                    <MudNavLink Href="/manage/reports" Icon="@Icons.Material.Filled.Assessment">Reports</MudNavLink>
+                }
+                else if (Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.Player)
+                {
+                    <!-- PLAYER MENU -->
+                    <MudNavLink Href="/dashboard" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
+                    <MudNavLink Href="/events" Icon="@Icons.Material.Filled.Event">My Events</MudNavLink>
+                    <MudNavLink Href="/events/history" Icon="@Icons.Material.Filled.History">Participated Events</MudNavLink>
+                    <MudNavLink Href="/player/wallet" Icon="@Icons.Material.Filled.AccountBalanceWallet">Wallet</MudNavLink>
+                    <MudNavLink Href="/player/profile" Icon="@Icons.Material.Filled.Person">Profile</MudNavLink>
+                }
+            }
+        </MudNavMenu>
+    </MudDrawer>
+
+    <MudMainContent Class="pa-6" Style="background-color: #F0F2F5; min-height: 100vh; padding-top: 80px !important;">
+        @if (_initialized)
+        {
+            @Body
+        }
+        else
+        {
+            <div class="d-flex align-items-center justify-content-center" style="height: 80vh;">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+            </div>
+        }
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _initialized = false;
+    private bool _drawerOpen = true;
+
+    private void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                Session.OnChange += StateHasChanged;
+                
+                // Auto login attempt using ProtectedLocalStorage
+                await Session.InitializeAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Session initialization failed: {ex.Message}");
+            }
+            finally
+            {
+                _initialized = true;
+                StateHasChanged();
+            }
+
+            // Redirect logic if unauthorized access
+            var path = Navigation.ToBaseRelativePath(Navigation.Uri);
+            if (!Session.IsLoggedIn && !path.StartsWith("login") && !path.StartsWith("activate"))
+            {
+                Navigation.NavigateTo("/login");
+            }
+        }
+    }
+
+    private async Task HandleLogout()
+    {
+        await Session.LogoutAsync();
+        Snackbar.Add("Logged out successfully.", Severity.Info);
+        Navigation.NavigateTo("/login");
+    }
+
+    public void Dispose()
+    {
+        Session.OnChange -= StateHasChanged;
+    }
+
+    private MudTheme MyCustomTheme = new MudTheme()
+    {
+        PaletteLight = new PaletteLight()
+        {
+            Primary = "#1877F2",       // Facebook Blue
+            Secondary = "#42B72A",     // Healthy Green
+            Success = "#42B72A",
+            Error = "#F02849",         // Soft Red
+            Background = "#F0F2F5",    // Facebook Canvas BG
+            Surface = "#FFFFFF",       // Pure White Cards
+            AppbarBackground = "#1877F2",
+            DrawerBackground = "#FFFFFF",
+            TextPrimary = "#1C1E21",
+            TextSecondary = "#606770"
+        },
+        LayoutProperties = new LayoutProperties()
+        {
+            DefaultBorderRadius = "8px"
+        }
+    };
+}

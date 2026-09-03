@@ -1,0 +1,138 @@
+@page "/manage/reports"
+@layout MainLayout
+@inject BadmintonHub.Client.Services.UserSession Session
+@inject MediatR.ISender Mediator
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Reports & Exports - Badminton Hub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
+    <div class="page-header-container">
+        <div class="page-header-text">
+        <MudText Typo="Typo.h4" Style="font-family: 'Outfit', sans-serif; font-weight: bold; color: #1c1e21;">
+            Reports & Exports
+        </MudText>
+        <MudText Typo="Typo.body1" Class="mud-text-secondary">
+            Generate and export system-wide reports for registrations, transactions, and logs.
+        </MudText>
+    </div>
+    </div>
+
+    <MudGrid>
+        <!-- Registration Report Card -->
+        <MudItem xs="12" sm="6">
+            <MudPaper Class="pa-6 d-flex flex-column justify-content-between" Style="height: 220px; border-radius: 12px;">
+                <div>
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Registrations Report</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        Contains event booking lists, fees paid, player levels, and cancellation flags.
+                    </MudText>
+                </div>
+                <div class="d-flex gap-2 mt-4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => Download(BadmintonHub.Application.Features.Reports.Queries.GetReportExport.ReportType.Registrations, BadmintonHub.Application.Features.Reports.Queries.GetReportExport.ExportFormat.Csv)" Style="text-transform: none; background-color: #1877F2;">
+                        Export CSV
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => Download(BadmintonHub.Application.Features.Reports.Queries.GetReportExport.ReportType.Registrations, BadmintonHub.Application.Features.Reports.Queries.GetReportExport.ExportFormat.Txt)" Style="text-transform: none;">
+                        Export TXT
+                    </MudButton>
+                </div>
+            </MudPaper>
+        </MudItem>
+
+        <!-- Wallet Ledger Card -->
+        <MudItem xs="12" sm="6">
+            <MudPaper Class="pa-6 d-flex flex-column justify-content-between" Style="height: 220px; border-radius: 12px;">
+                <div>
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Wallet Ledger Report</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        Comprehensive ledger detailing player credits, event debits, refunds, and adjustments.
+                    </MudText>
+                </div>
+                <div class="d-flex gap-2 mt-4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => Download(BadmintonHub.Application.Features.Reports.Queries.GetReportExport.ReportType.WalletLedger, BadmintonHub.Application.Features.Reports.Queries.GetReportExport.ExportFormat.Csv)" Style="text-transform: none; background-color: #1877F2;">
+                        Export CSV
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => Download(BadmintonHub.Application.Features.Reports.Queries.GetReportExport.ReportType.WalletLedger, BadmintonHub.Application.Features.Reports.Queries.GetReportExport.ExportFormat.Txt)" Style="text-transform: none;">
+                        Export TXT
+                    </MudButton>
+                </div>
+            </MudPaper>
+        </MudItem>
+
+        <!-- Activity Log Card -->
+        <MudItem xs="12" sm="6">
+            <MudPaper Class="pa-6 d-flex flex-column justify-content-between" Style="height: 220px; border-radius: 12px;">
+                <div>
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Activity Log Report</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        Tracks player actions like bookings, cancellations, waitlist entries, and promotions.
+                    </MudText>
+                </div>
+                <div class="d-flex gap-2 mt-4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => Download(BadmintonHub.Application.Features.Reports.Queries.GetReportExport.ReportType.ActivityLogs, BadmintonHub.Application.Features.Reports.Queries.GetReportExport.ExportFormat.Csv)" Style="text-transform: none; background-color: #1877F2;">
+                        Export CSV
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => Download(BadmintonHub.Application.Features.Reports.Queries.GetReportExport.ReportType.ActivityLogs, BadmintonHub.Application.Features.Reports.Queries.GetReportExport.ExportFormat.Txt)" Style="text-transform: none;">
+                        Export TXT
+                    </MudButton>
+                </div>
+            </MudPaper>
+        </MudItem>
+
+        <!-- Audit Log Card -->
+        <MudItem xs="12" sm="6">
+            <MudPaper Class="pa-6 d-flex flex-column justify-content-between" Style="height: 220px; border-radius: 12px;">
+                <div>
+                    <MudText Typo="Typo.h6" Class="font-weight-bold mb-2">Audit Logs Report</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        Contains compliance audit trails recording user status modifications and configuration changes.
+                    </MudText>
+                </div>
+                <div class="d-flex gap-2 mt-4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => Download(BadmintonHub.Application.Features.Reports.Queries.GetReportExport.ReportType.AuditLogs, BadmintonHub.Application.Features.Reports.Queries.GetReportExport.ExportFormat.Csv)" Style="text-transform: none; background-color: #1877F2;">
+                        Export CSV
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => Download(BadmintonHub.Application.Features.Reports.Queries.GetReportExport.ReportType.AuditLogs, BadmintonHub.Application.Features.Reports.Queries.GetReportExport.ExportFormat.Txt)" Style="text-transform: none;">
+                        Export TXT
+                    </MudButton>
+                </div>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    protected override void OnInitialized()
+    {
+        if (!Session.IsLoggedIn || (Session.CurrentUser?.Role != BadmintonHub.Domain.Enums.UserRole.Organizer && Session.CurrentUser?.Role != BadmintonHub.Domain.Enums.UserRole.SuperAdmin))
+        {
+            Navigation.NavigateTo("/");
+        }
+    }
+
+    private async Task Download(BadmintonHub.Application.Features.Reports.Queries.GetReportExport.ReportType reportType, BadmintonHub.Application.Features.Reports.Queries.GetReportExport.ExportFormat format)
+    {
+        try
+        {
+            var query = new BadmintonHub.Application.Features.Reports.Queries.GetReportExport.GetReportExportQuery
+            {
+                ReportType = reportType,
+                Format = format
+            };
+
+            var result = await Mediator.Send(query);
+            
+            // Convert byte array to Base64 to transfer to Javascript download helper
+            var base64 = Convert.ToBase64String(result.FileContent);
+            
+            await JS.InvokeVoidAsync("downloadFile", result.FileName, result.ContentType, base64);
+            Snackbar.Add($"{result.FileName} downloaded successfully.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Export failed: {ex.Message}", Severity.Error);
+        }
+    }
+}

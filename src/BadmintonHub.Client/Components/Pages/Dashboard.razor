@@ -1,0 +1,327 @@
+@page "/dashboard"
+@layout MainLayout
+@inject BadmintonHub.Client.Services.UserSession Session
+@inject BadmintonHub.Application.Common.Interfaces.IApplicationDbContext DbContext
+@inject MediatR.ISender Mediator
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IServiceProvider appServices
+
+<PageTitle>Dashboard - Badminton Hub</PageTitle>
+
+@if (!Session.IsLoggedIn)
+{
+    <div class="d-flex align-items-center justify-content-center" style="height: 80vh;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+    </div>
+}
+else
+{
+    <style>
+        .hover-card {
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+        .hover-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1) !important;
+        }
+    </style>
+
+    <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+        <!-- Dashboard Header -->
+        <div class="page-header-container">
+            <div class="page-header-text">
+                <MudText Typo="Typo.h4" Style="font-family: 'Outfit', sans-serif; font-weight: bold; color: #1c1e21;">
+                    Welcome back, @Session.CurrentUser?.FullName!
+                </MudText>
+                <MudText Typo="Typo.body1" Class="mud-text-secondary">
+                    Logged in as <strong>@Session.CurrentUser?.Role</strong> • Status: <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Text">@Session.CurrentUser?.Status</MudChip>
+                </MudText>
+            </div>
+        </div>
+
+        @if (Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.SuperAdmin)
+        {
+            <!-- SUPER ADMIN DASHBOARD -->
+            <MudGrid Class="mb-6" Spacing="4">
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-6 d-flex align-items-center h-100 hover-card" Elevation="2" Style="border-radius: 12px; background-color: #ffffff;" @onclick='() => Navigation.NavigateTo("/manage/organizers")'>
+                        <MudIcon Icon="@Icons.Material.Filled.Business" Color="Color.Primary" Size="Size.Large" Class="mr-4" />
+                        <div>
+                            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">TOTAL ORGANIZERS</MudText>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold">@_totalOrganizersCount</MudText>
+                        </div>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-6 d-flex align-items-center h-100 hover-card" Elevation="2" Style="border-radius: 12px; background-color: #ffffff;" @onclick='() => Navigation.NavigateTo("/manage/players")'>
+                        <MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Secondary" Size="Size.Large" Class="mr-4" />
+                        <div>
+                            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">TOTAL PLAYERS</MudText>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold">@_totalPlayersCount</MudText>
+                        </div>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-6 d-flex align-items-center h-100 hover-card" Elevation="2" Style="border-radius: 12px; background-color: #ffffff;" @onclick='() => Navigation.NavigateTo("/events")'>
+                        <MudIcon Icon="@Icons.Material.Filled.Event" Color="Color.Warning" Size="Size.Large" Class="mr-4" />
+                        <div>
+                            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">TOTAL EVENTS</MudText>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold">@_totalEventsCount</MudText>
+                        </div>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-6 d-flex align-items-center h-100 hover-card" Elevation="2" Style="border-radius: 12px; background-color: #ffffff;" @onclick='() => Navigation.NavigateTo("/events")'>
+                        <MudIcon Icon="@Icons.Material.Filled.Assignment" Color="Color.Info" Size="Size.Large" Class="mr-4" />
+                        <div>
+                            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">TOTAL REGISTRATIONS</MudText>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold">@_totalRegistrationsCount</MudText>
+                        </div>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        }
+        else if (Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.Organizer)
+        {
+            <!-- ORGANIZER DASHBOARD -->
+            <MudGrid Class="mb-6" Spacing="4">
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-6 d-flex align-items-center h-100 hover-card" Elevation="2" Style="border-radius: 12px; background-color: #ffffff;">
+                        <MudIcon Icon="@Icons.Material.Filled.ConfirmationNumber" Color="Color.Warning" Size="Size.Large" Class="mr-4" />
+                        <div>
+                            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">AVAILABLE CREDITS</MudText>
+                            <MudText Typo="Typo.h4" Color="Color.Warning" Class="font-weight-bold">@_organizerCredits</MudText>
+                        </div>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-6 d-flex align-items-center h-100 hover-card" Elevation="2" Style="border-radius: 12px; background-color: #ffffff;">
+                        <MudIcon Icon="@Icons.Material.Filled.Event" Color="Color.Primary" Size="Size.Large" Class="mr-4" />
+                        <div>
+                            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">TOTAL EVENTS</MudText>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold">@_totalEventsCount</MudText>
+                        </div>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-6 d-flex align-items-center h-100 hover-card" Elevation="2" Style="border-radius: 12px; background-color: #ffffff;">
+                        <MudIcon Icon="@Icons.Material.Filled.EventAvailable" Color="Color.Secondary" Size="Size.Large" Class="mr-4" />
+                        <div>
+                            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">UPCOMING EVENTS</MudText>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold">@_upcomingEventsCount</MudText>
+                        </div>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-6 d-flex align-items-center h-100 hover-card" Elevation="2" Style="border-radius: 12px; background-color: #ffffff;">
+                        <MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Info" Size="Size.Large" Class="mr-4" />
+                        <div>
+                            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">REGISTERED PLAYERS</MudText>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold">@_totalPlayersCount</MudText>
+                        </div>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+
+            <!-- Recent Activity Timeline for Organizer -->
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudPaper Class="pa-6" Elevation="2" Style="border-radius: 12px;">
+                        <div class="d-flex align-items-center justify-content-between mb-4">
+                            <MudText Typo="Typo.h6" Class="font-weight-bold">Recent Activity</MudText>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick='() => Navigation.NavigateTo("/events")' Size="Size.Small" Style="text-transform: none; background-color: #1877F2;">
+                                Manage Events
+                            </MudButton>
+                        </div>
+                        @if (_recentActivityLogs.Count == 0)
+                        {
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary pa-4 text-center">No recent activity found.</MudText>
+                        }
+                        else
+                        {
+                            <MudTimeline TimelinePosition="TimelinePosition.Start" Class="mt-4">
+                                @foreach (var log in _recentActivityLogs)
+                                {
+                                    <MudTimelineItem Color="Color.Info" Size="Size.Small">
+                                        <ItemContent>
+                                            <MudText Typo="Typo.body1" Class="font-weight-bold">@log.Action</MudText>
+                                            <MudText Typo="Typo.body2">@log.Description</MudText>
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@log.Timestamp.ToLocalTime().ToString("g")</MudText>
+                                        </ItemContent>
+                                    </MudTimelineItem>
+                                }
+                            </MudTimeline>
+                        }
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        }
+        else if (Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.Player)
+        {
+            <!-- PLAYER DASHBOARD -->
+            <MudGrid Class="mb-6" Spacing="4">
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-6 d-flex align-items-center h-100 hover-card" Elevation="2" Style="border-radius: 12px; background-color: #ffffff;">
+                        <MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Color="Color.Primary" Size="Size.Large" Class="mr-4" />
+                        <div>
+                            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">WALLET BALANCE</MudText>
+                            <MudText Typo="Typo.h4" Color="Color.Primary" Class="font-weight-bold">
+                                @Session.CurrentUser.WalletBalance.ToString("C")
+                            </MudText>
+                        </div>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-6 d-flex align-items-center h-100 hover-card" Elevation="2" Style="border-radius: 12px; background-color: #ffffff;">
+                        <MudIcon Icon="@Icons.Material.Filled.EventAvailable" Color="Color.Secondary" Size="Size.Large" Class="mr-4" />
+                        <div>
+                            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">UPCOMING EVENTS</MudText>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold">@_playerUpcomingEventsCount</MudText>
+                        </div>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-6 d-flex align-items-center h-100 hover-card" Elevation="2" Style="border-radius: 12px; background-color: #ffffff;">
+                        <MudIcon Icon="@Icons.Material.Filled.History" Color="Color.Info" Size="Size.Large" Class="mr-4" />
+                        <div>
+                            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">PARTICIPATED EVENTS</MudText>
+                            <MudText Typo="Typo.h4" Class="font-weight-bold">@_playerParticipatedEventsCount</MudText>
+                        </div>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-6 d-flex align-items-center h-100 hover-card" Elevation="2" Style="border-radius: 12px; background-color: #ffffff;">
+                        <MudIcon Icon="@Icons.Material.Filled.AccessTime" Color="Color.Error" Size="Size.Large" Class="mr-4" />
+                        <div>
+                            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">WAITLISTED EVENTS</MudText>
+                            <MudText Typo="Typo.h4" Color="Color.Error" Class="font-weight-bold">@_playerWaitlistedEventsCount</MudText>
+                        </div>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+
+            <MudGrid>
+                <!-- Upcoming Games -->
+                <MudItem xs="12">
+                    <MudPaper Class="pa-6" Elevation="2" Style="border-radius: 12px;">
+                        <MudText Typo="Typo.h6" Class="font-weight-bold mb-4">Your Upcoming Games</MudText>
+                        @if (_playerUpcomingList.Count == 0)
+                        {
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary text-center pa-4">No upcoming events booked.</MudText>
+                        }
+                        else
+                        {
+                            <MudSimpleTable Hover="true">
+                                <thead>
+                                    <tr>
+                                        <th>Event Name</th>
+                                        <th>Date</th>
+                                        <th>Time</th>
+                                        <th>Venue</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var reg in _playerUpcomingList)
+                                    {
+                                        <tr>
+                                            <td><strong>@reg.Event?.Name</strong></td>
+                                            <td>@reg.Event?.EventDate.ToShortDateString()</td>
+                                            <td>@reg.Event?.StartTime.ToString(@"hh\:mm") - @reg.Event?.EndTime.ToString(@"hh\:mm")</td>
+                                            <td>@reg.Event?.Venue</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </MudSimpleTable>
+                        }
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        }
+    </MudContainer>
+}
+
+@code {
+    // Stats variables
+    private int _totalOrganizersCount;
+    private int _totalPlayersCount;
+    private int _totalEventsCount;
+    private int _totalRegistrationsCount;
+
+    private int _organizerCredits;
+    private int _upcomingEventsCount;
+    private List<ActivityLog> _recentActivityLogs = new();
+
+    private int _playerUpcomingEventsCount;
+    private int _playerParticipatedEventsCount;
+    private int _playerWaitlistedEventsCount;
+    private List<Registration> _playerUpcomingList = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsLoggedIn)
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        await Session.RefreshUserAsync();
+        var today = DateTime.Now.Date;
+
+        using var scope = appServices.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+
+        if (Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.SuperAdmin)
+        {
+            _totalOrganizersCount = await db.Organizers.CountAsync();
+            _totalPlayersCount = await db.Users.CountAsync(u => u.Role == UserRole.Player);
+            _totalEventsCount = await db.Events.CountAsync();
+            _totalRegistrationsCount = await db.Registrations.CountAsync(r => !r.IsCancelled);
+            
+            _recentActivityLogs = await db.ActivityLogs
+                .Include(a => a.User)
+                .OrderByDescending(a => a.Timestamp)
+                .Take(5)
+                .ToListAsync();
+        }
+        else if (Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.Organizer)
+        {
+            var defaultOrg = await db.Organizers.FirstOrDefaultAsync(o => o.ContactNumber == Session.CurrentUser.PhoneNumber);
+            _organizerCredits = defaultOrg?.CreditsRemaining ?? 0;
+            if (defaultOrg != null)
+            {
+                _totalEventsCount = await db.Events.CountAsync(e => e.OrganizerId == defaultOrg.Id);
+                _upcomingEventsCount = await db.Events.CountAsync(e => e.OrganizerId == defaultOrg.Id && e.EventDate >= today);
+                
+                _recentActivityLogs = await db.ActivityLogs
+                    .Include(a => a.User)
+                    .Include(a => a.Event)
+                    .Where(a => a.Event != null && a.Event.OrganizerId == defaultOrg.Id)
+                    .OrderByDescending(a => a.Timestamp)
+                    .Take(10)
+                    .ToListAsync();
+            }
+            _totalPlayersCount = await db.Users.CountAsync(u => u.Role == UserRole.Player);
+        }
+        else if (Session.CurrentUser?.Role == BadmintonHub.Domain.Enums.UserRole.Player)
+        {
+            var playerId = Session.CurrentUser.Id;
+
+            _playerUpcomingList = await db.Registrations
+                .Include(r => r.Event)
+                .Where(r => r.PlayerId == playerId && !r.IsCancelled && r.Event!.EventDate >= today)
+                .OrderBy(r => r.Event!.EventDate)
+                .ToListAsync();
+
+            _playerUpcomingEventsCount = _playerUpcomingList.Count;
+
+            _playerParticipatedEventsCount = await db.Registrations
+                .Include(r => r.Event)
+                .CountAsync(r => r.PlayerId == playerId && !r.IsCancelled && r.Event!.EventDate < today);
+
+            _playerWaitlistedEventsCount = await db.Waitlists
+                .CountAsync(w => w.PlayerId == playerId && !w.IsCancelled && !w.IsPromoted);
+        }
+    }
+}

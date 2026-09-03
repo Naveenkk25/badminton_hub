@@ -1,0 +1,23 @@
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+WORKDIR /app
+EXPOSE 8080
+
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+COPY ["src/BadmintonHub.WebApi/BadmintonHub.WebApi.csproj", "src/BadmintonHub.WebApi/"]
+COPY ["src/BadmintonHub.Application/BadmintonHub.Application.csproj", "src/BadmintonHub.Application/"]
+COPY ["src/BadmintonHub.Domain/BadmintonHub.Domain.csproj", "src/BadmintonHub.Domain/"]
+COPY ["src/BadmintonHub.Infrastructure/BadmintonHub.Infrastructure.csproj", "src/BadmintonHub.Infrastructure/"]
+RUN dotnet restore "src/BadmintonHub.WebApi/BadmintonHub.WebApi.csproj"
+COPY . .
+WORKDIR "/src/src/BadmintonHub.WebApi"
+RUN dotnet build "BadmintonHub.WebApi.csproj" -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "BadmintonHub.WebApi.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+ENV ASPNETCORE_HTTP_PORTS=8080
+ENTRYPOINT ["dotnet", "BadmintonHub.WebApi.dll"]

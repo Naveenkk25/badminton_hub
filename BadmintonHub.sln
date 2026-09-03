@@ -1,0 +1,57 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{044F7334-4507-4070-BF51-17725BA58500}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BadmintonHub.Domain", "src\BadmintonHub.Domain\BadmintonHub.Domain.csproj", "{4881298C-153A-4ED9-BB10-0A80DD6FA479}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BadmintonHub.Application", "src\BadmintonHub.Application\BadmintonHub.Application.csproj", "{F96607DF-0451-4905-9121-BEDF10A6EE6D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BadmintonHub.Infrastructure", "src\BadmintonHub.Infrastructure\BadmintonHub.Infrastructure.csproj", "{6E946EDC-D9F6-49EB-8780-C5669F9DA7A4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BadmintonHub.WebApi", "src\BadmintonHub.WebApi\BadmintonHub.WebApi.csproj", "{B1558E42-F82B-45C2-B1F9-46FEDB9972E4}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{7323CEE2-2B9E-4FC0-B654-F468F0358EB4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BadmintonHub.Tests", "tests\BadmintonHub.Tests\BadmintonHub.Tests.csproj", "{DC4F1E10-B4E9-4674-9264-D91FE11AC2D9}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4881298C-153A-4ED9-BB10-0A80DD6FA479}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4881298C-153A-4ED9-BB10-0A80DD6FA479}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4881298C-153A-4ED9-BB10-0A80DD6FA479}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4881298C-153A-4ED9-BB10-0A80DD6FA479}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F96607DF-0451-4905-9121-BEDF10A6EE6D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F96607DF-0451-4905-9121-BEDF10A6EE6D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F96607DF-0451-4905-9121-BEDF10A6EE6D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F96607DF-0451-4905-9121-BEDF10A6EE6D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6E946EDC-D9F6-49EB-8780-C5669F9DA7A4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6E946EDC-D9F6-49EB-8780-C5669F9DA7A4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6E946EDC-D9F6-49EB-8780-C5669F9DA7A4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6E946EDC-D9F6-49EB-8780-C5669F9DA7A4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B1558E42-F82B-45C2-B1F9-46FEDB9972E4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B1558E42-F82B-45C2-B1F9-46FEDB9972E4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B1558E42-F82B-45C2-B1F9-46FEDB9972E4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B1558E42-F82B-45C2-B1F9-46FEDB9972E4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DC4F1E10-B4E9-4674-9264-D91FE11AC2D9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DC4F1E10-B4E9-4674-9264-D91FE11AC2D9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DC4F1E10-B4E9-4674-9264-D91FE11AC2D9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DC4F1E10-B4E9-4674-9264-D91FE11AC2D9}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{4881298C-153A-4ED9-BB10-0A80DD6FA479} = {044F7334-4507-4070-BF51-17725BA58500}
+		{F96607DF-0451-4905-9121-BEDF10A6EE6D} = {044F7334-4507-4070-BF51-17725BA58500}
+		{6E946EDC-D9F6-49EB-8780-C5669F9DA7A4} = {044F7334-4507-4070-BF51-17725BA58500}
+		{B1558E42-F82B-45C2-B1F9-46FEDB9972E4} = {044F7334-4507-4070-BF51-17725BA58500}
+		{DC4F1E10-B4E9-4674-9264-D91FE11AC2D9} = {7323CEE2-2B9E-4FC0-B654-F468F0358EB4}
+	EndGlobalSection
+EndGlobal
