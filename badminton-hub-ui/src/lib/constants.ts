@@ -149,30 +149,10 @@ export const NAV_ITEMS = [
     roles: [UserRole.SuperAdmin, UserRole.Organizer],
   },
   {
-    label: "Activity Logs",
-    href: "/logs/activity",
-    icon: "scroll-text",
-    roles: [UserRole.SuperAdmin],
-  },
-  {
-    label: "Event Logs",
-    href: "/logs/events",
-    icon: "clipboard-list",
-    roles: [UserRole.SuperAdmin, UserRole.Organizer],
-  },
-
-  {
     label: "Wallet",
     href: "/wallet",
     icon: "wallet",
     roles: [UserRole.Player],
-  },
-
-  {
-    label: "Settings",
-    href: "/settings",
-    icon: "settings",
-    roles: [UserRole.SuperAdmin],
   },
 ];
 
