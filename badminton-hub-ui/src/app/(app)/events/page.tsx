@@ -152,7 +152,7 @@ export default function EventsPage() {
   ).filter((e) => e.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   const completedEvents = events.filter(
-    (e) => e.status === EventStatus.Completed || e.status === EventStatus.Cancelled
+    (e) => e.status === EventStatus.Completed
   ).filter((e) => e.name.toLowerCase().includes(searchQuery.toLowerCase()))
    .sort((a, b) => new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime())
    .slice(0, 8);
