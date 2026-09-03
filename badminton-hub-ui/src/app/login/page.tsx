@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { motion } from "framer-motion";
-import { Phone, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Phone, Lock, Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 
@@ -27,6 +27,7 @@ export default function LoginPage() {
   const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isError, setIsError] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const {
     register,
@@ -38,6 +39,7 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginFormValues) => {
     setIsError(false);
+    setFormError(null);
     try {
       const user = await login(data);
       if (user.status === "PendingActivation") {
@@ -49,7 +51,8 @@ export default function LoginPage() {
       }
     } catch (error: any) {
       setIsError(true);
-      const errorMessage = error.response?.data?.message || "Invalid credentials. Please try again.";
+      const errorMessage = error.response?.data?.error || error.response?.data?.message || "Invalid credentials. Please try again.";
+      setFormError(errorMessage);
       toast.error(errorMessage);
     }
   };
@@ -130,6 +133,12 @@ export default function LoginPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                {formError && (
+                  <div className="p-3.5 mb-6 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm font-medium flex items-center gap-2.5">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>{formError}</span>
+                  </div>
+                )}
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                   <div className="space-y-2">
                     <Label htmlFor="mobileNumber">Mobile Number</Label>

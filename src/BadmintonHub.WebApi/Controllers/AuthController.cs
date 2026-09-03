@@ -44,23 +44,23 @@ public class AuthController : ControllerBase
         var user = await _userManager.FindByNameAsync(model.MobileNumber);
         if (user == null)
         {
-            return Unauthorized(new { error = "Invalid mobile number or password." });
+            return Unauthorized(new { error = "Invalid mobile number or password.", message = "Invalid mobile number or password." });
         }
 
         if (user.Status == UserStatus.Suspended)
         {
-            return StatusCode(403, new { error = "Account suspended. Contact organizer." });
+            return StatusCode(403, new { error = "Account suspended reach out Admin", message = "Account suspended reach out Admin" });
         }
 
         if (user.Status == UserStatus.Inactive)
         {
-            return StatusCode(403, new { error = "Account is inactive. Contact organizer." });
+            return StatusCode(403, new { error = "Account is inactive. Contact Admin.", message = "Account is inactive. Contact Admin." });
         }
 
         var result = await _signInManager.CheckPasswordSignInAsync(user, model.Password, false);
         if (!result.Succeeded)
         {
-            return Unauthorized(new { error = "Invalid mobile number or password." });
+            return Unauthorized(new { error = "Invalid mobile number or password.", message = "Invalid mobile number or password." });
         }
 
         var token = await GenerateJwtTokenAsync(user);
