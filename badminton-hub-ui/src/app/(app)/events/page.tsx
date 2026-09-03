@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/lib/auth";
 import { EventDto, EventStatus, UserRole } from "@/lib/types";
 import { EVENT_STATUS_CONFIG } from "@/lib/constants";
-import { Plus, CalendarDays, Lock, Trophy, XCircle, Search } from "lucide-react";
+import { Plus, CalendarDays, Lock, Trophy, XCircle, Search, Trash2, Loader2, Calendar } from "lucide-react";
+import { format } from "date-fns";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -56,11 +57,13 @@ export default function EventsPage() {
 
   const [selectedEvent, setSelectedEvent] = useState<EventDto | null>(null);
   const [eventToCancel, setEventToCancel] = useState<{event: EventDto, status: string} | null>(null);
+  const [eventToDelete, setEventToDelete] = useState<EventDto | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
   const [eventToSettle, setEventToSettle] = useState<EventDto | null>(null);
 
-  const handleEventAction = async (event: EventDto, action: "register" | "waitlist" | "edit" | "cancel" | "history" | "settle", guestCount?: number) => {
+  const handleEventAction = async (event: EventDto, action: "register" | "waitlist" | "edit" | "cancel" | "history" | "settle" | "delete", guestCount?: number) => {
     if (action === "register" || action === "waitlist") {
       try {
         await api.post(`/Events/${event.id}/register`, { guestCount: guestCount || 0 });
@@ -88,6 +91,8 @@ export default function EventsPage() {
     } else if (action === "settle") {
       setEventToSettle(event);
       setIsSettleModalOpen(true);
+    } else if (action === "delete") {
+      setEventToDelete(event);
     }
   };
 
@@ -107,6 +112,22 @@ export default function EventsPage() {
       console.error(error);
     } finally {
       setEventToCancel(null);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!eventToDelete) return;
+    setIsDeleting(true);
+    try {
+      const response = await api.delete(`/Events/${eventToDelete.id}`);
+      toast.success(response.data?.message || "Event permanently deleted successfully.");
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+      setEventToDelete(null);
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.error || error.response?.data?.message || "Failed to delete event.";
+      toast.error(errorMsg);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -337,6 +358,60 @@ export default function EventsPage() {
             </Button>
             <Button variant="destructive" onClick={confirmCancel} className="w-full sm:w-auto font-semibold">
               Cancel {eventToCancel?.status === "waitlisted" ? "Waitlist" : "Slot"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Event Confirmation Dialog */}
+      <Dialog open={!!eventToDelete} onOpenChange={(open) => !open && !isDeleting && setEventToDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-match-red text-xl font-bold">
+              <Trash2 className="h-5 w-5" /> Delete Event
+            </DialogTitle>
+            <DialogDescription className="space-y-3 pt-2 text-left">
+              <p className="text-foreground text-sm font-medium">
+                Are you sure you want to permanently delete this event? This action cannot be undone.
+              </p>
+              {eventToDelete && (
+                <div className="p-3.5 bg-muted/40 rounded-xl border border-border space-y-1.5">
+                  <p className="font-bold text-foreground text-base">{eventToDelete.name}</p>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5 font-medium">
+                    <Calendar className="h-4 w-4 text-court-blue" />
+                    {format(new Date(eventToDelete.eventDate), "EEEE, MMMM d, yyyy")}
+                  </p>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground italic">
+                Note: Events with existing player registrations cannot be deleted and must be cancelled instead.
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex sm:justify-end gap-3 mt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => setEventToDelete(null)} 
+              disabled={isDeleting}
+              className="w-full sm:w-auto font-semibold"
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={confirmDelete} 
+              disabled={isDeleting}
+              className="w-full sm:w-auto font-semibold bg-match-red hover:bg-match-red/90"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" /> Delete Event
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

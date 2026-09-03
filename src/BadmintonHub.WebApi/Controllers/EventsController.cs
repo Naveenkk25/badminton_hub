@@ -311,23 +311,6 @@ public class EventsController : ControllerBase
         return Ok(result);
     }
 
-    [Authorize(Roles = "SuperAdmin")]
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteEvent(Guid id)
-    {
-        var ev = await _context.Events.FindAsync(id);
-        if (ev == null) return NotFound();
-
-        // CRIT-005: Soft delete instead of hard delete
-        var currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "System";
-        ev.IsDeleted = true;
-        ev.DeletedDate = DateTime.UtcNow;
-        ev.DeletedBy = currentUserId;
-
-        await _context.SaveChangesAsync(default);
-        return NoContent();
-    }
-
     [Authorize(Roles = "SuperAdmin,Organizer")]
     [HttpPost("{id}/cancel")]
     public async Task<IActionResult> CancelEvent(Guid id)
@@ -389,6 +372,75 @@ public class EventsController : ControllerBase
 
         await _context.SaveChangesAsync(default);
         return Ok();
+    }
+
+    [Authorize(Roles = "SuperAdmin,Organizer")]
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteEvent(Guid id)
+    {
+        var ev = await _context.Events
+            .Include(e => e.Registrations)
+            .Include(e => e.WaitlistEntries)
+            .FirstOrDefaultAsync(e => e.Id == id);
+
+        if (ev == null)
+        {
+            return NotFound(new { error = "Event not found." });
+        }
+
+        // Rule 4: Authorization check (SuperAdmin or owner Organizer)
+        var userIdStringAuth = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        bool isSuperAdmin = User.IsInRole("SuperAdmin");
+        var eventOrganizer = await _context.Organizers.FindAsync(ev.OrganizerId);
+        if (!isSuperAdmin && !string.Equals(userIdStringAuth, eventOrganizer?.UserId.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            return StatusCode(403, new { error = "You do not have permission to delete this event." });
+        }
+
+        // Rule 3: Completed or past events should not be permanently deleted
+        if (ev.Status == EventStatus.Completed || ev.EventDate.Date < DateTime.UtcNow.Date)
+        {
+            return BadRequest(new { error = "Completed or past events cannot be permanently deleted." });
+        }
+
+        // Rule 2: If the event has one or more registrations, do NOT delete
+        if (ev.Registrations.Count > 0)
+        {
+            return BadRequest(new { error = "This event cannot be deleted because registrations exist. Please use Cancel Event instead." });
+        }
+
+        // Rule 1: Zero registrations -> allow permanent deletion
+        if (ev.WaitlistEntries.Any())
+        {
+            _context.Waitlists.RemoveRange(ev.WaitlistEntries);
+        }
+
+        // Detach any ActivityLogs pointing to this event ID to maintain referential integrity
+        var relatedLogs = await _context.ActivityLogs.Where(l => l.EventId == ev.Id).ToListAsync();
+        foreach (var l in relatedLogs)
+        {
+            l.EventId = null;
+        }
+
+        // Rule 5: Add audit log entry
+        var currentUserId = Guid.TryParse(userIdStringAuth, out var uId) ? uId : Guid.Empty;
+        var currentUserName = User.Identity?.Name ?? "Admin";
+
+        var auditLog = new ActivityLog
+        {
+            Id = Guid.NewGuid(),
+            UserId = currentUserId,
+            Action = "Event Deleted",
+            Description = $"Event '{ev.Name}' scheduled for {ev.EventDate:yyyy-MM-dd} was permanently deleted by {currentUserName}.",
+            Timestamp = DateTime.Now,
+            CreatedDate = DateTime.Now
+        };
+        _context.ActivityLogs.Add(auditLog);
+
+        _context.Events.Remove(ev);
+        await _context.SaveChangesAsync(default);
+
+        return Ok(new { message = "Event permanently deleted successfully." });
     }
 
     [Authorize(Roles = "SuperAdmin,Organizer")]

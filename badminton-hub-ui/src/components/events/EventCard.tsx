@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
-import { MapPin, Calendar, Clock, DollarSign, Users, CheckCircle2, Lock, Trophy, XCircle, Info, History } from "lucide-react";
+import { MapPin, Calendar, Clock, DollarSign, Users, CheckCircle2, Lock, Trophy, XCircle, Info, History, MoreVertical, Trash2, Edit } from "lucide-react";
 import { EventDto, EventStatus, PlayerCategory } from "@/lib/types";
 import { EVENT_STATUS_CONFIG, CATEGORY_CONFIG, formatCurrency, formatTime } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -13,11 +13,18 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 interface EventCardProps {
   event: EventDto;
   userStatus?: { status: string, position: number } | null;
-  onAction?: (event: EventDto, action: "register" | "waitlist" | "edit" | "cancel" | "history" | "settle", guestCount?: number) => void;
+  onAction?: (event: EventDto, action: "register" | "waitlist" | "edit" | "cancel" | "history" | "settle" | "delete", guestCount?: number) => void;
   onViewDetails?: (event: EventDto) => void;
 }
 
@@ -263,13 +270,56 @@ export function EventCard({ event, userStatus, onAction, onViewDetails }: EventC
         <div className="mt-auto w-full flex flex-col gap-2">
           {renderActionButton()}
           {isSuperAdminOrOrganizer ? (
-            <Button 
-              variant="outline" 
-              className="w-full text-sm font-semibold border-border hover:bg-surfaceHover min-h-[44px]"
-              onClick={() => onViewDetails?.(event)}
-            >
-              <Info className="mr-1.5 h-4 w-4" /> Details
-            </Button>
+            <div className="flex items-center gap-2 w-full">
+              <Button 
+                variant="outline" 
+                className="flex-1 text-sm font-semibold border-border hover:bg-surfaceHover min-h-[44px]"
+                onClick={() => onViewDetails?.(event)}
+              >
+                <Info className="mr-1.5 h-4 w-4" /> Details
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-11 w-11 border-border hover:bg-surfaceHover shrink-0"
+                    title="More actions"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  {event.status !== EventStatus.Completed && (
+                    <DropdownMenuItem 
+                      onClick={() => onAction?.(event, "edit")}
+                      className="cursor-pointer"
+                    >
+                      <Edit className="mr-2 h-4 w-4" /> Manage Event
+                    </DropdownMenuItem>
+                  )}
+                  {event.status !== EventStatus.Completed && event.status !== EventStatus.Cancelled && (
+                    <DropdownMenuItem 
+                      onClick={() => onAction?.(event, "cancel")}
+                      className="cursor-pointer text-amber-600 focus:text-amber-600"
+                    >
+                      <XCircle className="mr-2 h-4 w-4" /> Cancel Event
+                    </DropdownMenuItem>
+                  )}
+                  {event.status !== EventStatus.Completed && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem 
+                        onClick={() => onAction?.(event, "delete")}
+                        className="cursor-pointer text-match-red focus:text-match-red"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" /> Delete Event
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           ) : (
             <Button 
               variant="outline" 
