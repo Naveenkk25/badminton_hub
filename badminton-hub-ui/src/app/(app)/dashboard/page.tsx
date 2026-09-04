@@ -1,36 +1,48 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { useAuth } from "@/lib/auth";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Building2, CalendarDays, ScrollText, CheckCircle2, MapPin, Clock, ArrowRight } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Users, Building2, CalendarDays, DollarSign, Wallet, Clock, MapPin } from "lucide-react";
 import api from "@/lib/api";
-
 import { useQuery } from "@tanstack/react-query";
-import { formatCurrency, formatDateTime } from "@/lib/constants";
+import { formatCurrency } from "@/lib/constants";
+import { format } from "date-fns";
 
 export default function DashboardPage() {
   const { user } = useAuth();
 
+  // Organizers (Super Admin only)
   const { data: organizers = [] } = useQuery({
     queryKey: ["organizers"],
     queryFn: async () => {
       const res = await api.get("/Organizers");
       return res.data.data || res.data;
     },
-    enabled: user?.role === "SuperAdmin"
+    enabled: user?.role === "SuperAdmin",
   });
 
+  // Players (Super Admin only)
   const { data: players = [] } = useQuery({
     queryKey: ["players"],
     queryFn: async () => {
       const res = await api.get("/Players");
       return res.data.data || res.data;
     },
-    enabled: user?.role === "SuperAdmin"
+    enabled: user?.role === "SuperAdmin",
   });
 
+  // Events (All roles)
   const { data: events = [] } = useQuery({
     queryKey: ["events"],
     queryFn: async () => {
@@ -39,33 +51,7 @@ export default function DashboardPage() {
     },
   });
 
-  const { data: activityLogs = [] } = useQuery({
-    queryKey: ["activityLogs", user?.id],
-    queryFn: async () => {
-      const res = await api.get(`/ActivityLogs/player/${user?.id}`);
-      return res.data.data || res.data;
-    },
-    enabled: !!user?.id && user?.role === "Player"
-  });
-
-  const { data: globalAuditLogs = [] } = useQuery({
-    queryKey: ["globalAuditLogs"],
-    queryFn: async () => {
-      const res = await api.get("/AuditLogs");
-      return res.data.data || res.data;
-    },
-    enabled: user?.role === "SuperAdmin"
-  });
-
-  const { data: globalActivityLogs = [] } = useQuery({
-    queryKey: ["globalActivityLogs"],
-    queryFn: async () => {
-      const res = await api.get("/ActivityLogs");
-      return res.data.data || res.data;
-    },
-    enabled: user?.role === "Organizer"
-  });
-
+  // Organizer details for current logged-in Organizer
   const { data: orgData } = useQuery({
     queryKey: ["my-org-info", user?.id],
     queryFn: async () => {
@@ -73,270 +59,393 @@ export default function DashboardPage() {
       const list = response.data.data || response.data;
       return list.find((item: any) => item.org.contactNumber === user?.phoneNumber)?.org;
     },
-    enabled: !!user?.phoneNumber && user?.role === "Organizer"
+    enabled: !!user?.phoneNumber && user?.role === "Organizer",
   });
 
+  // Player personal profile data (wallet, etc.)
   const { data: playerData } = useQuery({
     queryKey: ["playerData", user?.id],
     queryFn: async () => (await api.get(`/Players/${user?.id}`)).data,
-    enabled: user?.role === "Player"
+    enabled: user?.role === "Player",
   });
-  
+
+  // Player registration statuses for upcoming events
+  const { data: userStatuses = [] } = useQuery<any[]>({
+    queryKey: ["playerStatuses", user?.id],
+    queryFn: async () => {
+      if (!user || user.role !== "Player") return [];
+      const response = await api.get(`/Events/player/${user.id}/registrations-status`);
+      return response.data || [];
+    },
+    enabled: !!user?.id && user?.role === "Player",
+  });
+
   const containerVariants = {
     hidden: { opacity: 0 },
     show: {
       opacity: 1,
-      transition: { staggerChildren: 0.1 },
+      transition: { staggerChildren: 0.08 },
     },
   };
 
   const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
+    hidden: { opacity: 0, y: 15 },
     show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } },
   };
 
-  const activeEventsCount = events.filter((e: any) => e.status === "Open" || e.status === "Full" || e.status === "Locked").length;
-  // Approximating registrations by registeredPlayersCount on events
-  const totalRegistrations = events.reduce((sum: number, e: any) => sum + (e.registeredPlayersCount || 0), 0);
+  // Helper to format event date & time
+  const formatEventDate = (dateStr: string, timeStr?: string) => {
+    try {
+      const d = new Date(dateStr);
+      const formattedDate = format(d, "EEE, MMM d, yyyy");
+      if (timeStr) {
+        return `${formattedDate} • ${timeStr.substring(0, 5)}`;
+      }
+      return formattedDate;
+    } catch {
+      return dateStr;
+    }
+  };
 
-  // Organizer specific data
+  // Helper for Super Admin organizer lookup
+  const getOrganizerName = (organizerId: string, fallbackName?: string) => {
+    if (fallbackName) return fallbackName;
+    const match = organizers.find((o: any) => o.org?.id === organizerId);
+    return match?.org?.name || match?.user?.fullName || "Organizer";
+  };
+
+  // -------------------------------------------------------------
+  // SUPER ADMIN COMPUTED DATA
+  // -------------------------------------------------------------
+  const allUpcomingEvents = events
+    .filter((e: any) => e.status !== "Completed" && e.status !== "Cancelled")
+    .sort((a: any, b: any) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime());
+
+  const totalPlatformRevenue = events.reduce(
+    (sum: number, e: any) => sum + (e.registeredPlayersCount || 0) * (e.reservedFee || 0),
+    0
+  );
+
+  // -------------------------------------------------------------
+  // ORGANIZER COMPUTED DATA
+  // -------------------------------------------------------------
   const orgEvents = events.filter((e: any) => e.organizerId === orgData?.id);
-  const orgActiveEventsCount = orgEvents.filter((e: any) => e.status === "Open" || e.status === "Full" || e.status === "Locked").length;
-  const orgTotalParticipants = orgEvents.reduce((sum: number, e: any) => sum + (e.registeredPlayersCount || 0), 0);
-  const orgTotalRevenue = orgEvents.reduce((sum: number, e: any) => sum + ((e.registeredPlayersCount || 0) * (e.reservedFee || 0)), 0);
   const upcomingOrgEvents = orgEvents
-    .filter((e: any) => e.status === "Open" || e.status === "Full" || e.status === "Locked")
-    .sort((a: any, b: any) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime())
-    .slice(0, 3);
+    .filter((e: any) => e.status !== "Completed" && e.status !== "Cancelled")
+    .sort((a: any, b: any) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime());
+
+  const orgTotalRegistrations = orgEvents.reduce(
+    (sum: number, e: any) => sum + (e.registeredPlayersCount || 0),
+    0
+  );
+
+  const orgTotalRevenue = orgEvents.reduce(
+    (sum: number, e: any) => sum + (e.registeredPlayersCount || 0) * (e.reservedFee || 0),
+    0
+  );
+
+  // -------------------------------------------------------------
+  // PLAYER COMPUTED DATA
+  // -------------------------------------------------------------
+  const playerUpcomingEvents = events
+    .filter((e: any) => e.status !== "Completed" && e.status !== "Cancelled")
+    .map((e: any) => {
+      const statusObj = userStatuses.find(
+        (u: any) => u.eventId?.toLowerCase() === e.id?.toLowerCase()
+      );
+      if (!statusObj) return null;
+      return {
+        ...e,
+        playerStatus: statusObj.status,
+        waitlistPosition: statusObj.position,
+      };
+    })
+    .filter(Boolean)
+    .sort((a: any, b: any) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime());
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2">
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex flex-col gap-1">
         <h2 className="text-3xl font-heading font-bold tracking-tight">
           Welcome back, {user?.fullName?.split(" ")[0] || "User"}!
         </h2>
-        <p className="text-muted-foreground">
-          Here&apos;s an overview of what&apos;s happening today.
+        <p className="text-muted-foreground text-sm font-medium">
+          Here is what you need to know right now.
         </p>
       </div>
 
+      {/* ========================================================= */}
+      {/* SUPER ADMIN DASHBOARD                                     */}
+      {/* 3 cards: Organizers, Players, Upcoming Events .Revenue    */}
+      {/* Table: Upcoming Events (Event | Organizer | Date | Regs)  */}
+      {/* ========================================================= */}
       {user?.role === "SuperAdmin" && (
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="show"
-          className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
-        >
-          <KpiCard
-            title="Total Organizers"
-            value={organizers.length}
-            trend="Active platform partners"
-            icon={<Building2 className="h-5 w-5" />}
-            color="bg-court-blue"
-            textColor="text-court-blue"
-            variants={itemVariants}
-          />
-          <KpiCard
-            title="Total Players"
-            value={players.length}
-            trend="Registered athletes"
-            icon={<Users className="h-5 w-5" />}
-            color="bg-court-green"
-            textColor="text-court-green"
-            variants={itemVariants}
-          />
-          <KpiCard
-            title="Active Events"
-            value={activeEventsCount}
-            trend="Open and full events"
-            icon={<CalendarDays className="h-5 w-5" />}
-            color="bg-shuttlecock-gold"
-            textColor="text-shuttlecock-gold"
-            variants={itemVariants}
-          />
-          <KpiCard
-            title="Total Registrations"
-            value={totalRegistrations}
-            trend="Across all time"
-            icon={<ScrollText className="h-5 w-5" />}
-            color="bg-match-red"
-            textColor="text-match-red"
-            variants={itemVariants}
-          />
-        </motion.div>
-      )}
-
-      {user?.role === "Organizer" && (
-        <div className="space-y-6">
+        <div className="space-y-8">
           <motion.div
             variants={containerVariants}
             initial="hidden"
             animate="show"
-            className="grid gap-4 md:grid-cols-3"
+            className="grid gap-5 grid-cols-1 md:grid-cols-3"
           >
-            <KpiCard
-              title="Active Events"
-              value={orgActiveEventsCount}
-              trend="Currently open or full"
-              icon={<CalendarDays className="h-5 w-5" />}
-              color="bg-shuttlecock-gold"
-              textColor="text-shuttlecock-gold"
+            <StatCard
+              title="Organizers"
+              value={organizers.length}
+              subtext="Active registered organizers"
+              icon={<Building2 className="h-5 w-5 text-court-blue" />}
               variants={itemVariants}
             />
-            <KpiCard
-              title="Total Participants"
-              value={orgTotalParticipants}
-              trend="Across all events"
-              icon={<Users className="h-5 w-5" />}
-              color="bg-court-blue"
-              textColor="text-court-blue"
+            <StatCard
+              title="Players"
+              value={players.length}
+              subtext="Total registered athletes"
+              icon={<Users className="h-5 w-5 text-court-green" />}
               variants={itemVariants}
             />
-            <KpiCard
-              title="Total Revenue"
-              value={formatCurrency(orgTotalRevenue)}
-              trend="Estimated gross revenue"
-              icon={<ScrollText className="h-5 w-5" />}
-              color="bg-court-green"
-              textColor="text-court-green"
+            <StatCard
+              title="Upcoming Events"
+              value={allUpcomingEvents.length}
+              badge={`${formatCurrency(totalPlatformRevenue)} Revenue`}
+              subtext="Across entire platform"
+              icon={<CalendarDays className="h-5 w-5 text-shuttlecock-gold" />}
               variants={itemVariants}
             />
           </motion.div>
 
-          <div className="grid gap-6 md:grid-cols-1">
-            <Card className="border-border/50 shadow-sm">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-lg flex items-center justify-between">
-                  Upcoming Events
-                  <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {upcomingOrgEvents.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-10 text-center border-2 border-dashed border-border/50 rounded-xl">
-                    <CalendarDays className="h-8 w-8 text-muted-foreground mb-3 opacity-20" />
-                    <p className="text-muted-foreground font-medium">No upcoming events.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {upcomingOrgEvents.map((ev: any) => (
-                      <div key={ev.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border/50">
-                        <div>
-                          <p className="font-semibold">{ev.name}</p>
-                          <div className="flex items-center text-xs text-muted-foreground mt-1 gap-3">
-                            <span className="flex items-center gap-1"><CalendarDays className="h-3 w-3"/>{new Date(ev.eventDate).toLocaleDateString()}</span>
-                            <span className="flex items-center gap-1"><Clock className="h-3 w-3"/>{ev.startTime.substring(0,5)}</span>
+          {/* Upcoming Events Table */}
+          <Card className="border-border/50 shadow-sm overflow-hidden">
+            <CardHeader className="pb-4 border-b border-border/40">
+              <CardTitle className="text-lg font-heading font-bold flex items-center justify-between">
+                <span>Upcoming Events</span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  {allUpcomingEvents.length} scheduled
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {allUpcomingEvents.length === 0 ? (
+                <EmptyTableState message="No upcoming events scheduled right now." />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent border-border/40">
+                      <TableHead className="w-[30%]">Event</TableHead>
+                      <TableHead className="w-[25%]">Organizer</TableHead>
+                      <TableHead className="w-[25%]">Date</TableHead>
+                      <TableHead className="w-[20%] text-right">Registrations</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {allUpcomingEvents.map((ev: any) => (
+                      <TableRow key={ev.id} className="border-border/30 hover:bg-muted/30 transition-colors">
+                        <TableCell className="font-semibold text-foreground">
+                          <div>{ev.name}</div>
+                          {ev.venue && (
+                            <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5 font-normal">
+                              <MapPin className="h-3 w-3" /> {ev.venue}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground font-medium">
+                          {getOrganizerName(ev.organizerId, ev.organizerName)}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          <div className="flex items-center gap-1.5 font-medium">
+                            <Clock className="h-3.5 w-3.5 text-muted-foreground/70" />
+                            {formatEventDate(ev.eventDate, ev.startTime)}
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium">{ev.registeredPlayersCount} / {ev.maxPlayers}</p>
-                          <p className="text-xs text-muted-foreground">Players</p>
-                        </div>
-                      </div>
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          <span className="text-foreground font-semibold">
+                            {ev.registeredPlayersCount || 0}
+                          </span>
+                          <span className="text-muted-foreground text-xs"> / {ev.maxPlayers}</span>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
 
-      {user?.role === "Player" && (
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="show"
-          className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
-        >
-          {/* Player specific KPIs */}
-          <KpiCard
-            title="Available Balance"
-            value={formatCurrency(playerData?.walletBalance ?? user?.walletBalance ?? 0)}
-            trend="Current wallet funds"
-            icon={<ScrollText className="h-5 w-5" />}
-            color="bg-court-green"
-            textColor="text-court-green"
-            variants={itemVariants}
-          />
-        </motion.div>
+      {/* ========================================================= */}
+      {/* ORGANIZER DASHBOARD                                       */}
+      {/* 3 cards: My Events, Registrations, Revenue                */}
+      {/* Table: Upcoming Events (Event | Date | Registrations)     */}
+      {/* ========================================================= */}
+      {user?.role === "Organizer" && (
+        <div className="space-y-8">
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="show"
+            className="grid gap-5 grid-cols-1 md:grid-cols-3"
+          >
+            <StatCard
+              title="My Events"
+              value={upcomingOrgEvents.length}
+              subtext="Upcoming scheduled events"
+              icon={<CalendarDays className="h-5 w-5 text-court-blue" />}
+              variants={itemVariants}
+            />
+            <StatCard
+              title="Registrations"
+              value={orgTotalRegistrations}
+              subtext="Total participants booked"
+              icon={<Users className="h-5 w-5 text-court-green" />}
+              variants={itemVariants}
+            />
+            <StatCard
+              title="Revenue"
+              value={formatCurrency(orgTotalRevenue)}
+              subtext="Total entry fees collected"
+              icon={<DollarSign className="h-5 w-5 text-shuttlecock-gold" />}
+              variants={itemVariants}
+            />
+          </motion.div>
+
+          {/* Upcoming Events Table */}
+          <Card className="border-border/50 shadow-sm overflow-hidden">
+            <CardHeader className="pb-4 border-b border-border/40">
+              <CardTitle className="text-lg font-heading font-bold flex items-center justify-between">
+                <span>Upcoming Events</span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  {upcomingOrgEvents.length} scheduled
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {upcomingOrgEvents.length === 0 ? (
+                <EmptyTableState message="No upcoming events scheduled. Create one to get started." />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent border-border/40">
+                      <TableHead className="w-[45%]">Event</TableHead>
+                      <TableHead className="w-[35%]">Date</TableHead>
+                      <TableHead className="w-[20%] text-right">Registrations</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {upcomingOrgEvents.map((ev: any) => (
+                      <TableRow key={ev.id} className="border-border/30 hover:bg-muted/30 transition-colors">
+                        <TableCell className="font-semibold text-foreground">
+                          <div>{ev.name}</div>
+                          {ev.venue && (
+                            <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5 font-normal">
+                              <MapPin className="h-3 w-3" /> {ev.venue}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          <div className="flex items-center gap-1.5 font-medium">
+                            <Clock className="h-3.5 w-3.5 text-muted-foreground/70" />
+                            {formatEventDate(ev.eventDate, ev.startTime)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          <span className="text-foreground font-semibold">
+                            {ev.registeredPlayersCount || 0}
+                          </span>
+                          <span className="text-muted-foreground text-xs"> / {ev.maxPlayers}</span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
 
+      {/* ========================================================= */}
+      {/* PLAYER DASHBOARD                                          */}
+      {/* 2 cards: My Upcoming Events, Wallet Balance               */}
+      {/* Table: My Upcoming Events (Event | Date | Status)         */}
+      {/* ========================================================= */}
       {user?.role === "Player" && (
-        <div className="grid gap-4 md:grid-cols-1">
-          <Card className="col-span-1 border-border/50 shadow-sm">
-            <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
+        <div className="space-y-8">
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="show"
+            className="grid gap-5 grid-cols-1 md:grid-cols-2"
+          >
+            <StatCard
+              title="My Upcoming Events"
+              value={playerUpcomingEvents.length}
+              subtext="Events registered or waitlisted"
+              icon={<CalendarDays className="h-5 w-5 text-court-blue" />}
+              variants={itemVariants}
+            />
+            <StatCard
+              title="Wallet Balance"
+              value={formatCurrency(playerData?.walletBalance ?? user?.walletBalance ?? 0)}
+              subtext="Available balance for bookings"
+              icon={<Wallet className="h-5 w-5 text-court-green" />}
+              variants={itemVariants}
+            />
+          </motion.div>
+
+          {/* My Upcoming Events Table */}
+          <Card className="border-border/50 shadow-sm overflow-hidden">
+            <CardHeader className="pb-4 border-b border-border/40">
+              <CardTitle className="text-lg font-heading font-bold flex items-center justify-between">
+                <span>My Upcoming Events</span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  {playerUpcomingEvents.length} active
+                </span>
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              {(() => {
-                let logsToDisplay: any[] = [];
-                let isAuditLog = false;
-
-                if (user?.role === "Player") {
-                  logsToDisplay = activityLogs;
-                }
-
-                if (logsToDisplay.length === 0) {
-                  return (
-                    <div className="flex flex-col items-center justify-center py-12 text-center">
-                      <div className="bg-muted p-4 rounded-full mb-4">
-                        <ScrollText className="h-8 w-8 text-muted-foreground" />
-                      </div>
-                      <h3 className="text-lg font-medium">
-                        No History Yet
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        Your recent activities will appear here.
-                      </p>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="relative border-l border-muted-foreground/20 ml-4 space-y-6 pb-4">
-                    {logsToDisplay.map((log: any, idx: number) => {
-                      let colorClass = "bg-blue-500";
-                      let actionText = log.action;
-                      let descriptionText = "";
-
-                      if (isAuditLog) {
-                        descriptionText = `${log.userFullName} - ${log.entityName} ${log.action}`;
-                        if (log.action.includes("Create") || log.action.includes("Add")) colorClass = "bg-green-500";
-                        else if (log.action.includes("Update") || log.action.includes("Change")) colorClass = "bg-blue-500";
-                        else if (log.action.includes("Delete") || log.action.includes("Remove")) colorClass = "bg-red-500";
-                        else colorClass = "bg-emerald-500";
-                      } else {
-                        descriptionText = log.description;
-                        if (log.action.includes("Joined") || log.action.includes("Waitlisted") || log.action.includes("Register")) {
-                          colorClass = "bg-green-500";
-                        } else if (log.action.includes("Cancel")) {
-                          colorClass = "bg-red-500";
-                        } else if (log.action.includes("Credit") || log.action.includes("Refund")) {
-                          colorClass = "bg-emerald-500";
-                        } else if (log.action.includes("Debit") || log.action.includes("Paid")) {
-                          colorClass = "bg-orange-500";
-                        }
-                      }
-
-                      return (
-                        <div key={log.id || idx} className="relative pl-6">
-                          <span className={`absolute -left-[9px] top-1 h-4 w-4 rounded-full ${colorClass} ring-4 ring-background`} />
-                          <div className="flex flex-col gap-1">
-                            <div className="flex items-center justify-between">
-                              <h4 className="text-sm font-semibold">{actionText}</h4>
-                              <span className="text-xs text-muted-foreground">
-                                {formatDateTime(log.timestamp)}
-                              </span>
+            <CardContent className="p-0">
+              {playerUpcomingEvents.length === 0 ? (
+                <EmptyTableState message="You have no upcoming events. Check out the Events page to book a slot." />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent border-border/40">
+                      <TableHead className="w-[45%]">Event</TableHead>
+                      <TableHead className="w-[35%]">Date</TableHead>
+                      <TableHead className="w-[20%] text-right">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {playerUpcomingEvents.map((ev: any) => (
+                      <TableRow key={ev.id} className="border-border/30 hover:bg-muted/30 transition-colors">
+                        <TableCell className="font-semibold text-foreground">
+                          <div>{ev.name}</div>
+                          {ev.venue && (
+                            <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5 font-normal">
+                              <MapPin className="h-3 w-3" /> {ev.venue}
                             </div>
-                            <p className="text-sm text-muted-foreground">{descriptionText}</p>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          <div className="flex items-center gap-1.5 font-medium">
+                            <Clock className="h-3.5 w-3.5 text-muted-foreground/70" />
+                            {formatEventDate(ev.eventDate, ev.startTime)}
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {ev.playerStatus === "registered" ? (
+                            <Badge className="bg-court-green/15 text-court-green border border-court-green/20 hover:bg-court-green/20 font-semibold px-2.5 py-0.5 text-xs">
+                              Registered
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-amber-500/15 text-amber-500 border border-amber-500/20 hover:bg-amber-500/20 font-semibold px-2.5 py-0.5 text-xs">
+                              Waitlist #{ev.waitlistPosition || 1}
+                            </Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -345,26 +454,65 @@ export default function DashboardPage() {
   );
 }
 
-function KpiCard({ title, value, trend, icon, color, textColor, variants }: any) {
+// -------------------------------------------------------------
+// REUSABLE MINIMAL STAT CARD
+// -------------------------------------------------------------
+function StatCard({
+  title,
+  value,
+  subtext,
+  badge,
+  icon,
+  variants,
+}: {
+  title: string;
+  value: string | number;
+  subtext?: string;
+  badge?: string;
+  icon: React.ReactNode;
+  variants?: any;
+}) {
   return (
     <motion.div variants={variants}>
-      <Card className="overflow-hidden border-border/50 shadow-sm card-hover relative group">
-        {/* Subtle background decoration */}
-        <div className={`absolute -right-6 -top-6 h-24 w-24 rounded-full opacity-10 transition-transform group-hover:scale-150 ${color}`} />
-        
+      <Card className="border-border/50 shadow-sm bg-card hover:border-border transition-all relative overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
+          <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
             {title}
           </CardTitle>
-          <div className={`p-2 rounded-lg bg-background shadow-sm border border-border/50 ${textColor}`}>
+          <div className="p-2.5 rounded-xl bg-muted/40 border border-border/40">
             {icon}
           </div>
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-mono font-bold tracking-tight">{value}</div>
-          <p className="text-xs text-muted-foreground mt-1 font-medium">{trend}</p>
+          <div className="flex items-baseline justify-between gap-2">
+            <div className="text-3xl font-mono font-bold tracking-tight text-foreground">
+              {value}
+            </div>
+            {badge && (
+              <Badge variant="secondary" className="bg-court-green/10 text-court-green font-semibold text-xs border-court-green/20">
+                {badge}
+              </Badge>
+            )}
+          </div>
+          {subtext && (
+            <p className="text-xs text-muted-foreground mt-1.5 font-medium">{subtext}</p>
+          )}
         </CardContent>
       </Card>
     </motion.div>
+  );
+}
+
+// -------------------------------------------------------------
+// EMPTY TABLE STATE
+// -------------------------------------------------------------
+function EmptyTableState({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-14 px-4 text-center">
+      <div className="h-12 w-12 rounded-full bg-muted/40 flex items-center justify-center mb-3">
+        <CalendarDays className="h-6 w-6 text-muted-foreground/40" />
+      </div>
+      <p className="text-sm text-muted-foreground font-medium max-w-sm">{message}</p>
+    </div>
   );
 }
