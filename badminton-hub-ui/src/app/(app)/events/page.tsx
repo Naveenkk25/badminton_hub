@@ -57,6 +57,7 @@ export default function EventsPage() {
 
   const [selectedEvent, setSelectedEvent] = useState<EventDto | null>(null);
   const [eventToCancel, setEventToCancel] = useState<{event: EventDto, status: string} | null>(null);
+  const [selectedSlotIdsToCancel, setSelectedSlotIdsToCancel] = useState<string[]>([]);
   const [eventToCancelEntire, setEventToCancelEntire] = useState<EventDto | null>(null);
   const [isCancellingEvent, setIsCancellingEvent] = useState(false);
 
@@ -83,7 +84,9 @@ export default function EventsPage() {
       }
     } else if (action === "cancel") {
       const status = getUserStatus(event.id)?.status || "registered";
+      const mySlots = userStatuses.filter(u => u.eventId?.toLowerCase() === event.id?.toLowerCase());
       setEventToCancel({ event, status });
+      setSelectedSlotIdsToCancel(mySlots.map(s => s.registrationId).filter(Boolean));
     } else if (action === "edit") {
       setEventToEdit(event);
       setIsCreateDrawerOpen(true);
@@ -99,8 +102,24 @@ export default function EventsPage() {
   const confirmCancel = async () => {
     if (!eventToCancel) return;
     try {
-      const response = await api.post(`/Events/${eventToCancel.event.id}/cancel-slot`);
-      toast.success(response.data?.message || "Successfully cancelled your slot.");
+      const mySlots = userStatuses.filter(u => u.eventId?.toLowerCase() === eventToCancel.event.id?.toLowerCase());
+      let payload: any = {};
+      if (mySlots.length > 1) {
+        if (selectedSlotIdsToCancel.length === 0) {
+          toast.error("Please select at least one slot to cancel.");
+          return;
+        }
+        if (selectedSlotIdsToCancel.length === mySlots.length) {
+          payload = { cancelAll: true };
+        } else {
+          payload = { registrationIds: selectedSlotIdsToCancel };
+        }
+      } else if (mySlots.length === 1 && mySlots[0]?.registrationId) {
+        payload = { registrationId: mySlots[0].registrationId };
+      }
+
+      const response = await api.post(`/Events/${eventToCancel.event.id}/cancel-slot`, payload);
+      toast.success(response.data?.message || "Successfully cancelled slot(s).");
       queryClient.invalidateQueries({ queryKey: ["events"] });
       queryClient.invalidateQueries({ queryKey: ["playerStatuses", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["eventDetails"] });
@@ -112,6 +131,7 @@ export default function EventsPage() {
       console.error(error);
     } finally {
       setEventToCancel(null);
+      setSelectedSlotIdsToCancel([]);
     }
   };
 
@@ -306,7 +326,7 @@ export default function EventsPage() {
 
       <Dialog open={!!eventToCancel} onOpenChange={(open) => !open && setEventToCancel(null)}>
         <DialogContent className="max-w-md p-6 bg-surface border-border/50">
-          <DialogHeader className="mb-4">
+          <DialogHeader className="mb-2">
             <DialogTitle className="text-xl font-heading font-bold text-foreground">
               {eventToCancel?.status === "waitlisted" ? "Cancel Waitlist" : "Cancel Slot"}
             </DialogTitle>
@@ -320,47 +340,123 @@ export default function EventsPage() {
                   ? "Are you sure you want to cancel your waitlist registration?"
                   : "Are you sure you want to cancel your registration?"}
               </span>
-              {eventToCancel && (
-                <div className="text-sm text-foreground bg-muted/80 p-4 rounded-lg border border-border/50 space-y-2 mb-2">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Event:</span>
-                    <span className="font-semibold">{eventToCancel.event.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Category:</span>
-                    <span className="font-semibold">{eventToCancel.event.category}</span>
-                  </div>
-                  
-                  {eventToCancel.status === "registered" && (
-                    <>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Refund ({getUserBookedCount(eventToCancel.event.id)} slot{getUserBookedCount(eventToCancel.event.id) > 1 ? 's' : ''}):</span>
-                        <span className="font-semibold text-court-green">
-                          {new Date() >= new Date(eventToCancel.event.cutoffDateTime) ? "$0.00 CAD" : formatCurrency(eventToCancel.event.reservedFee * getUserBookedCount(eventToCancel.event.id))}
-                        </span>
-                      </div>
-                      {new Date() >= new Date(eventToCancel.event.cutoffDateTime) && (
-                        <div className="text-xs text-match-red font-medium mt-2 leading-tight">
-                          * Cut-off time has passed. Refund is not available.
-                        </div>
-                      )}
-                    </>
-                  )}
-                  {eventToCancel.status === "waitlisted" && (
-                    <div className="text-xs text-muted-foreground mt-2 leading-tight">
-                      * You haven't paid any fee for waitlisting. You will be removed from the waitlist immediately.
+              {eventToCancel && (() => {
+                const eventSlots = userStatuses.filter(u => u.eventId?.toLowerCase() === eventToCancel.event.id?.toLowerCase());
+                const selectedRegisteredCount = eventSlots.length > 1 
+                  ? eventSlots.filter(s => selectedSlotIdsToCancel.includes(s.registrationId) && s.status === "registered").length
+                  : (eventToCancel.status === "registered" ? 1 : 0);
+                const isAfterCutoff = new Date() >= new Date(eventToCancel.event.cutoffDateTime);
+                const refundTotal = isAfterCutoff ? 0 : eventToCancel.event.reservedFee * selectedRegisteredCount;
+
+                return (
+                  <div className="text-sm text-foreground bg-muted/80 p-4 rounded-lg border border-border/50 space-y-2 mb-2">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Event:</span>
+                      <span className="font-semibold">{eventToCancel.event.name}</span>
                     </div>
-                  )}
-                </div>
-              )}
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Category:</span>
+                      <span className="font-semibold">{eventToCancel.event.category}</span>
+                    </div>
+                    
+                    {eventSlots.length > 1 && (
+                      <div className="space-y-2 mt-3 pt-3 border-t border-border/50">
+                        <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
+                          <span>Select participant(s) to cancel ({selectedSlotIdsToCancel.length}/{eventSlots.length}):</span>
+                          <button
+                            type="button"
+                            className="text-court-blue hover:underline font-medium text-xs"
+                            onClick={() => {
+                              if (selectedSlotIdsToCancel.length === eventSlots.length) {
+                                setSelectedSlotIdsToCancel([]);
+                              } else {
+                                setSelectedSlotIdsToCancel(eventSlots.map(s => s.registrationId).filter(Boolean));
+                              }
+                            }}
+                          >
+                            {selectedSlotIdsToCancel.length === eventSlots.length ? "Deselect All" : "Select All"}
+                          </button>
+                        </div>
+                        <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                          {eventSlots.map((slot: any, idx: number) => {
+                            const isSelected = selectedSlotIdsToCancel.includes(slot.registrationId);
+                            const isGuest = slot.isGuest || !!slot.guestName;
+                            const displayName = slot.guestName || `${user?.fullName || "Main Player"} (You)`;
+                            return (
+                              <div
+                                key={slot.registrationId || idx}
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setSelectedSlotIdsToCancel(prev => prev.filter(id => id !== slot.registrationId));
+                                  } else {
+                                    setSelectedSlotIdsToCancel(prev => [...prev, slot.registrationId]);
+                                  }
+                                }}
+                                className={cn(
+                                  "flex items-center justify-between p-2.5 rounded-lg border text-xs cursor-pointer transition-colors",
+                                  isSelected ? "border-court-blue bg-court-blue/10 text-foreground" : "border-border/50 bg-background/50 text-muted-foreground hover:bg-muted/40"
+                                )}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    readOnly
+                                    className="rounded border-border text-court-blue focus:ring-court-blue h-4 w-4 pointer-events-none"
+                                  />
+                                  <span className="font-semibold text-foreground">{displayName}</span>
+                                  {isGuest ? (
+                                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 uppercase">Guest</Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 uppercase text-court-blue border-court-blue/30">Main</Badge>
+                                  )}
+                                </div>
+                                <span className="text-[11px] font-medium capitalize">
+                                  {slot.status === "waitlisted" ? `WL #${slot.position}` : "Confirmed"}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedRegisteredCount > 0 && (
+                      <div className="border-t border-border/50 pt-2 mt-2">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Refund ({selectedRegisteredCount} slot{selectedRegisteredCount > 1 ? 's' : ''}):</span>
+                          <span className="font-semibold text-court-green">
+                            {isAfterCutoff ? "$0.00 CAD" : formatCurrency(refundTotal)}
+                          </span>
+                        </div>
+                        {isAfterCutoff && (
+                          <div className="text-xs text-match-red font-medium mt-1 leading-tight">
+                            * Cut-off time has passed. Cancellation is blocked or non-refundable.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {eventToCancel.status === "waitlisted" && selectedRegisteredCount === 0 && (
+                      <div className="text-xs text-muted-foreground mt-2 leading-tight">
+                        * You haven't paid any fee for waitlisting. You will be removed from the waitlist immediately.
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </DialogHeader>
           <DialogFooter className="flex sm:justify-end gap-3 mt-4">
             <Button variant="outline" onClick={() => setEventToCancel(null)} className="w-full sm:w-auto font-semibold">
               Keep {eventToCancel?.status === "waitlisted" ? "Waitlist" : "Registration"}
             </Button>
-            <Button variant="destructive" onClick={confirmCancel} className="w-full sm:w-auto font-semibold">
-              Cancel {eventToCancel?.status === "waitlisted" ? "Waitlist" : "Slot"}
+            <Button 
+              variant="destructive" 
+              onClick={confirmCancel} 
+              disabled={userStatuses.filter(u => u.eventId?.toLowerCase() === eventToCancel?.event.id?.toLowerCase()).length > 1 && selectedSlotIdsToCancel.length === 0}
+              className="w-full sm:w-auto font-semibold"
+            >
+              Cancel {selectedSlotIdsToCancel.length > 0 ? `${selectedSlotIdsToCancel.length} Slot${selectedSlotIdsToCancel.length > 1 ? 's' : ''}` : "Slot"}
             </Button>
           </DialogFooter>
         </DialogContent>

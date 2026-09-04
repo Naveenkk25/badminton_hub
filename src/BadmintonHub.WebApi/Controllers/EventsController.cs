@@ -554,6 +554,9 @@ public class EventsController : ControllerBase
                 registrationId = r.Id,
                 playerId = r.PlayerId,
                 playerName = !string.IsNullOrEmpty(r.GuestName) ? r.GuestName : (r.Player != null ? r.Player.FullName : "Unknown"),
+                guestName = r.GuestName,
+                isGuest = !string.IsNullOrEmpty(r.GuestName),
+                position = 0,
                 isWaitlisted = false,
                 isCancelled = r.IsCancelled,
                 registrationDate = r.RegistrationDate
@@ -566,7 +569,10 @@ public class EventsController : ControllerBase
             .Select(w => new {
                 registrationId = w.Id,
                 playerId = w.PlayerId,
-                playerName = w.Player != null ? w.Player.FullName : "Unknown",
+                playerName = !string.IsNullOrEmpty(w.GuestName) ? w.GuestName : (w.Player != null ? w.Player.FullName : "Unknown"),
+                guestName = w.GuestName,
+                isGuest = !string.IsNullOrEmpty(w.GuestName),
+                position = w.Position,
                 isWaitlisted = true,
                 isCancelled = w.IsCancelled,
                 registrationDate = w.JoinedDate
@@ -577,7 +583,7 @@ public class EventsController : ControllerBase
     }
 
     [HttpPost("{id}/cancel-slot")]
-    public async Task<IActionResult> CancelPlayerSlot(Guid id, [FromServices] MediatR.IMediator mediator)
+    public async Task<IActionResult> CancelPlayerSlot(Guid id, [FromBody] CancelSlotRequest? request, [FromServices] MediatR.IMediator mediator)
     {
         var userIdStr = User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
         if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var playerId))
@@ -587,7 +593,14 @@ public class EventsController : ControllerBase
 
         try
         {
-            var command = new CancelRegistrationCommand(id, playerId);
+            var command = new CancelRegistrationCommand(
+                EventId: id,
+                PlayerId: playerId,
+                RegistrationId: request?.RegistrationId,
+                RegistrationIds: request?.RegistrationIds,
+                GuestName: request?.GuestName,
+                CancelAll: request?.CancelAll ?? false
+            );
             var result = await mediator.Send(command);
             return Ok(new { success = result.Success, message = result.Message });
         }
@@ -603,12 +616,26 @@ public class EventsController : ControllerBase
     {
         var activeRegs = await _context.Registrations
             .Where(r => r.PlayerId == id && !r.IsCancelled)
-            .Select(r => new { eventId = r.EventId, status = "registered", position = 0 })
+            .Select(r => new { 
+                registrationId = r.Id,
+                eventId = r.EventId, 
+                status = "registered", 
+                position = 0,
+                guestName = r.GuestName,
+                isGuest = !string.IsNullOrEmpty(r.GuestName)
+            })
             .ToListAsync();
 
         var activeWaitlist = await _context.Waitlists
             .Where(w => w.PlayerId == id && !w.IsCancelled && !w.IsPromoted)
-            .Select(w => new { eventId = w.EventId, status = "waitlisted", position = w.Position })
+            .Select(w => new { 
+                registrationId = w.Id,
+                eventId = w.EventId, 
+                status = "waitlisted", 
+                position = w.Position,
+                guestName = w.GuestName,
+                isGuest = !string.IsNullOrEmpty(w.GuestName)
+            })
             .ToListAsync();
 
         return Ok(activeRegs.Concat(activeWaitlist));
@@ -677,4 +704,13 @@ public class ApiUpdateEventModel
     public int MaxPlayers { get; set; }
     public DateTime CutoffDateTime { get; set; }
 }
+
+public class CancelSlotRequest
+{
+    public Guid? RegistrationId { get; set; }
+    public List<Guid>? RegistrationIds { get; set; }
+    public string? GuestName { get; set; }
+    public bool CancelAll { get; set; } = false;
+}
+
 

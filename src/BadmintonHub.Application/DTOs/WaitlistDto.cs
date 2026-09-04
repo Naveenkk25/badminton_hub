@@ -11,6 +11,7 @@ public class WaitlistDto
     public string PlayerName { get; set; } = string.Empty;
     public string PlayerMobile { get; set; } = string.Empty;
     public string PlayerCategory { get; set; } = string.Empty;
+    public string? GuestName { get; set; }
     public int Position { get; set; }
     public DateTime JoinedDate { get; set; }
     public bool IsPromoted { get; set; }

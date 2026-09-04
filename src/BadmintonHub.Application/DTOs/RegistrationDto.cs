@@ -12,6 +12,7 @@ public class RegistrationDto
     public string PlayerMobile { get; set; } = string.Empty;
     public string PlayerCategory { get; set; } = string.Empty;
     public DateTime RegistrationDate { get; set; }
+    public string? GuestName { get; set; }
     public decimal ReservedFee { get; set; }
     public decimal? ActualFee { get; set; }
     public decimal? RefundAmount { get; set; }

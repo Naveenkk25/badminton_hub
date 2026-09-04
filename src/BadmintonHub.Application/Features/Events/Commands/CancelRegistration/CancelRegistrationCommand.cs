@@ -16,7 +16,14 @@ public class CancelRegistrationResult
     public string Message { get; set; } = string.Empty;
 }
 
-public record CancelRegistrationCommand(Guid EventId, Guid PlayerId) : IRequest<CancelRegistrationResult>;
+public record CancelRegistrationCommand(
+    Guid EventId, 
+    Guid PlayerId, 
+    Guid? RegistrationId = null, 
+    List<Guid>? RegistrationIds = null,
+    string? GuestName = null,
+    bool CancelAll = false
+) : IRequest<CancelRegistrationResult>;
 
 public class CancelRegistrationCommandHandler : IRequestHandler<CancelRegistrationCommand, CancelRegistrationResult>
 {
@@ -38,155 +45,275 @@ public class CancelRegistrationCommandHandler : IRequestHandler<CancelRegistrati
             throw new Exception("Associated event not found.");
         }
 
-        // 2. Fetch all registrations and waitlists for this player group
-        var playerRegistrations = await _context.Registrations
-            .Include(r => r.Player)
-            .Where(r => r.EventId == request.EventId && r.PlayerId == request.PlayerId && !r.IsCancelled)
-            .ToListAsync(cancellationToken);
-
-        var playerWaitlists = await _context.Waitlists
-            .Include(w => w.Player)
-            .Where(w => w.EventId == request.EventId && w.PlayerId == request.PlayerId && !w.IsCancelled && !w.IsPromoted)
-            .ToListAsync(cancellationToken);
-
-        if (!playerRegistrations.Any() && !playerWaitlists.Any())
-        {
-            throw new Exception("Active registration or waitlist entry not found.");
-        }
-
+        // 2. Validate Cutoff
         bool isAfterCutoff = _dateTime.Now >= @event.CutoffDateTime;
-
-        // Block cancellation after cutoff
         if (isAfterCutoff)
         {
             throw new Exception("Cancellation is blocked after the cutoff time.");
         }
 
-        var player = playerRegistrations.FirstOrDefault()?.Player ?? playerWaitlists.FirstOrDefault()?.Player;
+        // 3. Resolve targeted registrations and waitlist entries to cancel
+        var targetRegistrations = new List<Registration>();
+        var targetWaitlists = new List<Waitlist>();
 
-        int cancelledRegCount = playerRegistrations.Count;
-        int cancelledWaitlistCount = playerWaitlists.Count;
-        int totalCancelledSlots = cancelledRegCount + cancelledWaitlistCount;
-        decimal totalRefund = totalCancelledSlots * @event.ReservedFee;
+        if (request.RegistrationId.HasValue)
+        {
+            // Try finding matching registration
+            var singleReg = await _context.Registrations
+                .Include(r => r.Player)
+                .FirstOrDefaultAsync(r => r.Id == request.RegistrationId.Value && r.EventId == request.EventId && !r.IsCancelled, cancellationToken);
 
-        // Cancel registrations
-        foreach (var r in playerRegistrations)
+            if (singleReg != null)
+            {
+                targetRegistrations.Add(singleReg);
+            }
+            else
+            {
+                // Try finding matching waitlist entry
+                var singleWl = await _context.Waitlists
+                    .Include(w => w.Player)
+                    .FirstOrDefaultAsync(w => w.Id == request.RegistrationId.Value && w.EventId == request.EventId && !w.IsCancelled && !w.IsPromoted, cancellationToken);
+                
+                if (singleWl != null)
+                {
+                    targetWaitlists.Add(singleWl);
+                }
+            }
+        }
+        else if (request.RegistrationIds != null && request.RegistrationIds.Any())
+        {
+            var multiRegs = await _context.Registrations
+                .Include(r => r.Player)
+                .Where(r => request.RegistrationIds.Contains(r.Id) && r.EventId == request.EventId && !r.IsCancelled)
+                .ToListAsync(cancellationToken);
+            targetRegistrations.AddRange(multiRegs);
+
+            var multiWls = await _context.Waitlists
+                .Include(w => w.Player)
+                .Where(w => request.RegistrationIds.Contains(w.Id) && w.EventId == request.EventId && !w.IsCancelled && !w.IsPromoted)
+                .ToListAsync(cancellationToken);
+            targetWaitlists.AddRange(multiWls);
+        }
+        else if (!string.IsNullOrEmpty(request.GuestName))
+        {
+            if (request.GuestName.Equals("main", StringComparison.OrdinalIgnoreCase))
+            {
+                // Cancel main player only (GuestName is null)
+                var mainReg = await _context.Registrations
+                    .Include(r => r.Player)
+                    .FirstOrDefaultAsync(r => r.EventId == request.EventId && r.PlayerId == request.PlayerId && r.GuestName == null && !r.IsCancelled, cancellationToken);
+                if (mainReg != null) targetRegistrations.Add(mainReg);
+            }
+            else
+            {
+                // Target by guest name
+                var guestReg = await _context.Registrations
+                    .Include(r => r.Player)
+                    .FirstOrDefaultAsync(r => r.EventId == request.EventId && r.PlayerId == request.PlayerId && r.GuestName == request.GuestName && !r.IsCancelled, cancellationToken);
+                if (guestReg != null)
+                {
+                    targetRegistrations.Add(guestReg);
+                }
+                else
+                {
+                    var guestWl = await _context.Waitlists
+                        .Include(w => w.Player)
+                        .FirstOrDefaultAsync(w => w.EventId == request.EventId && w.PlayerId == request.PlayerId && w.GuestName == request.GuestName && !w.IsCancelled && !w.IsPromoted, cancellationToken);
+                    if (guestWl != null) targetWaitlists.Add(guestWl);
+                }
+            }
+        }
+        else
+        {
+            // Cancel all active slots (main player + guests) for this player
+            var allRegs = await _context.Registrations
+                .Include(r => r.Player)
+                .Where(r => r.EventId == request.EventId && r.PlayerId == request.PlayerId && !r.IsCancelled)
+                .ToListAsync(cancellationToken);
+            targetRegistrations.AddRange(allRegs);
+
+            var allWls = await _context.Waitlists
+                .Include(w => w.Player)
+                .Where(w => w.EventId == request.EventId && w.PlayerId == request.PlayerId && !w.IsCancelled && !w.IsPromoted)
+                .ToListAsync(cancellationToken);
+            targetWaitlists.AddRange(allWls);
+        }
+
+        if (!targetRegistrations.Any() && !targetWaitlists.Any())
+        {
+            throw new Exception("Active registration or waitlist entry not found.");
+        }
+
+        // 4. Mark targeted items as cancelled
+        foreach (var r in targetRegistrations)
         {
             r.IsCancelled = true;
             r.CancelledDate = _dateTime.Now;
         }
 
-        // Cancel waitlist entries
-        foreach (var w in playerWaitlists)
+        foreach (var w in targetWaitlists)
         {
             w.IsCancelled = true;
             w.CancelledDate = _dateTime.Now;
         }
 
-        // Process refund
-        if (player != null && totalRefund > 0)
-        {
-            player.WalletBalance += totalRefund;
+        // 5. Process refunds for cancelled participants
+        // Group by PlayerId so refunds go to the payer who registered them
+        var playerGroups = targetRegistrations.Select(r => new { r.PlayerId, r.ReservedFee, r.Player })
+            .Concat(targetWaitlists.Select(w => new { w.PlayerId, ReservedFee = @event.ReservedFee, w.Player }))
+            .GroupBy(x => x.PlayerId);
 
-            var refundTransaction = new WalletTransaction
+        decimal totalRefundAll = 0;
+        foreach (var group in playerGroups)
+        {
+            decimal refundAmount = group.Sum(x => x.ReservedFee);
+            totalRefundAll += refundAmount;
+            var payer = group.FirstOrDefault()?.Player ?? await _context.Users.FindAsync(new object[] { group.Key }, cancellationToken);
+            if (payer != null && refundAmount > 0)
             {
-                Id = Guid.NewGuid(),
-                PlayerId = player.Id,
-                Amount = totalRefund,
-                Type = WalletTransactionType.Refund,
-                Description = $"Refund for cancelling Event: {@event.Name} ({totalCancelledSlots} slot{(totalCancelledSlots > 1 ? "s" : "")})",
-                Timestamp = _dateTime.Now,
-                CreatedDate = _dateTime.Now
-            };
-            _context.WalletTransactions.Add(refundTransaction);
+                payer.WalletBalance += refundAmount;
+
+                var refundTransaction = new WalletTransaction
+                {
+                    Id = Guid.NewGuid(),
+                    PlayerId = payer.Id,
+                    Amount = refundAmount,
+                    Type = WalletTransactionType.Refund,
+                    Description = $"Refund for cancelling Event: {@event.Name} ({group.Count()} slot{(group.Count() > 1 ? "s" : "")})",
+                    Timestamp = _dateTime.Now,
+                    CreatedDate = _dateTime.Now
+                };
+                _context.WalletTransactions.Add(refundTransaction);
+            }
         }
 
-        // Log cancellation activity
+        // 6. Log Cancellation Activity
+        string cancelDesc;
+        if (targetRegistrations.Count == 1 && !targetWaitlists.Any())
+        {
+            var firstTarget = targetRegistrations.First();
+            cancelDesc = !string.IsNullOrEmpty(firstTarget.GuestName) 
+                ? $"Cancelled guest {firstTarget.GuestName}." 
+                : $"Cancelled main player slot.";
+        }
+        else
+        {
+            cancelDesc = $"Cancelled {targetRegistrations.Count + targetWaitlists.Count} slot(s) ({targetRegistrations.Count} registered, {targetWaitlists.Count} waitlisted).";
+        }
+
         var cancelLog = new ActivityLog
         {
             Id = Guid.NewGuid(),
             UserId = request.PlayerId,
             EventId = @event.Id,
             Action = "Player Cancelled",
-            Description = $"Player {player?.FullName ?? "Unknown"} cancelled {totalCancelledSlots} slot(s) ({cancelledRegCount} registered, {cancelledWaitlistCount} waitlisted). Refunded {totalRefund:C}.",
+            Description = $"{cancelDesc} Refunded {totalRefundAll:C}.",
             Timestamp = _dateTime.Now,
             CreatedDate = _dateTime.Now
         };
         _context.ActivityLogs.Add(cancelLog);
 
-        // Adjust registered count
-        @event.RegisteredPlayersCount = Math.Max(0, @event.RegisteredPlayersCount - cancelledRegCount);
+        // 7. Recalculate event capacity using active participants/slots
+        int newlyAvailableSlots = targetRegistrations.Count;
 
-        // 3. FIFO Waitlist Promotion Loop for open spots
-        // Load all active waitlist entries for other players in FIFO order
-        var eligibleWaitlists = await _context.Waitlists
-            .Include(w => w.Player)
-            .Where(w => w.EventId == @event.Id && !w.IsCancelled && !w.IsPromoted && w.PlayerId != request.PlayerId)
-            .OrderBy(w => w.Position)
-            .ToListAsync(cancellationToken);
+        // Current active registrations still in event (excluding cancelled target registrations)
+        var cancelledRegIds = targetRegistrations.Select(r => r.Id).ToHashSet();
+        int activeRegistrationsCount = await _context.Registrations
+            .CountAsync(r => r.EventId == @event.Id && !r.IsCancelled && !cancelledRegIds.Contains(r.Id), cancellationToken);
 
-        foreach (var candidate in eligibleWaitlists)
+        @event.RegisteredPlayersCount = activeRegistrationsCount;
+
+        // 8. FIFO Waitlist Promotion: Promote ONLY the exact number of available slots
+        int slotsToPromote = Math.Min(newlyAvailableSlots, Math.Max(0, @event.MaxPlayers - @event.RegisteredPlayersCount));
+
+        if (slotsToPromote > 0)
         {
-            if (@event.RegisteredPlayersCount >= @event.MaxPlayers)
+            var cancelledWaitlistIds = targetWaitlists.Select(w => w.Id).ToHashSet();
+            var eligibleWaitlists = await _context.Waitlists
+                .Include(w => w.Player)
+                .Where(w => w.EventId == @event.Id && !w.IsCancelled && !w.IsPromoted && !cancelledWaitlistIds.Contains(w.Id))
+                .OrderBy(w => w.Position)
+                .ToListAsync(cancellationToken);
+
+            int promotedCount = 0;
+            foreach (var candidate in eligibleWaitlists)
             {
-                break; // Event is full
+                if (promotedCount >= slotsToPromote)
+                {
+                    break; // Promoted exactly the required number of slots
+                }
+
+                var candidatePlayer = candidate.Player;
+                if (candidatePlayer == null)
+                {
+                    candidate.IsCancelled = true;
+                    candidate.CancelledDate = _dateTime.Now;
+                    continue;
+                }
+
+                // Create confirmed Registration for promoted waitlist candidate
+                var newRegistration = new Registration
+                {
+                    Id = Guid.NewGuid(),
+                    EventId = @event.Id,
+                    PlayerId = candidatePlayer.Id,
+                    GuestName = candidate.GuestName,
+                    RegistrationDate = _dateTime.Now,
+                    ReservedFee = @event.ReservedFee,
+                    CreatedDate = _dateTime.Now
+                };
+                _context.Registrations.Add(newRegistration);
+
+                candidate.IsPromoted = true;
+                candidate.PromotedDate = _dateTime.Now;
+
+                @event.RegisteredPlayersCount++;
+                promotedCount++;
+
+                var promoLog = new ActivityLog
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = candidatePlayer.Id,
+                    EventId = @event.Id,
+                    Action = "Player Promoted",
+                    Description = $"Player/Guest {candidate.GuestName ?? candidatePlayer.FullName} promoted from waitlist to registered.",
+                    Timestamp = _dateTime.Now,
+                    CreatedDate = _dateTime.Now
+                };
+                _context.ActivityLogs.Add(promoLog);
             }
 
-            var candidatePlayer = candidate.Player;
-            if (candidatePlayer == null)
+            // Reassign positions sequentially for remaining waitlist entries
+            var remainingWaitlist = eligibleWaitlists
+                .Where(w => !w.IsCancelled && !w.IsPromoted)
+                .OrderBy(w => w.Position)
+                .ToList();
+
+            int nextPos = 1;
+            foreach (var entry in remainingWaitlist)
             {
-                candidate.IsCancelled = true;
-                candidate.CancelledDate = _dateTime.Now;
-                continue;
+                entry.Position = nextPos++;
             }
-
-            // Create Registration
-            var newRegistration = new Registration
-            {
-                Id = Guid.NewGuid(),
-                EventId = @event.Id,
-                PlayerId = candidatePlayer.Id,
-                GuestName = candidate.GuestName,
-                RegistrationDate = _dateTime.Now,
-                ReservedFee = @event.ReservedFee,
-                CreatedDate = _dateTime.Now
-            };
-            _context.Registrations.Add(newRegistration);
-
-            // Mark waitlist as promoted
-            candidate.IsPromoted = true;
-            candidate.PromotedDate = _dateTime.Now;
-
-            @event.RegisteredPlayersCount++;
-
-            // Log Promotion Activity
-            var promoLog = new ActivityLog
-            {
-                Id = Guid.NewGuid(),
-                UserId = candidatePlayer.Id,
-                EventId = @event.Id,
-                Action = "Player Promoted",
-                Description = $"Player/Guest {candidate.GuestName ?? candidatePlayer.FullName} promoted from waitlist to registered.",
-                Timestamp = _dateTime.Now,
-                CreatedDate = _dateTime.Now
-            };
-            _context.ActivityLogs.Add(promoLog);
+            @event.WaitlistedPlayersCount = remainingWaitlist.Count;
         }
-
-        // 4. Reassign positions for remaining active waitlist entries
-        var remainingWaitlist = eligibleWaitlists
-            .Where(w => !w.IsCancelled && !w.IsPromoted)
-            .OrderBy(w => w.Position)
-            .ToList();
-
-        int nextPos = 1;
-        foreach (var entry in remainingWaitlist)
+        else
         {
-            entry.Position = nextPos++;
-        }
-        @event.WaitlistedPlayersCount = remainingWaitlist.Count;
+            // If no slots were opened (e.g. cancelled a waitlist slot), simply reassign remaining waitlist positions
+            var cancelledWaitlistIds = targetWaitlists.Select(w => w.Id).ToHashSet();
+            var remainingWaitlist = await _context.Waitlists
+                .Where(w => w.EventId == @event.Id && !w.IsCancelled && !w.IsPromoted && !cancelledWaitlistIds.Contains(w.Id))
+                .OrderBy(w => w.Position)
+                .ToListAsync(cancellationToken);
 
-        // Update event status
+            int nextPos = 1;
+            foreach (var entry in remainingWaitlist)
+            {
+                entry.Position = nextPos++;
+            }
+            @event.WaitlistedPlayersCount = remainingWaitlist.Count;
+        }
+
+        // Update event status based on active capacity
         if (@event.RegisteredPlayersCount >= @event.MaxPlayers)
         {
             @event.Status = EventStatus.Full;
@@ -200,7 +327,7 @@ public class CancelRegistrationCommandHandler : IRequestHandler<CancelRegistrati
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        string resultMessage = totalCancelledSlots > 0 
+        string resultMessage = (targetRegistrations.Count + targetWaitlists.Count) > 0 
             ? "Cancellation successful. Entry fee has been refunded." 
             : "Cancellation successful.";
 

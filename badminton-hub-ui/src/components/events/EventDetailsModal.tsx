@@ -1,11 +1,12 @@
 "use client";
 
-import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { MapPin, Calendar, Clock, DollarSign, Users, AlertCircle } from "lucide-react";
+import { MapPin, Calendar, Clock, DollarSign, Users, AlertCircle, XCircle, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import api from "@/lib/api";
+import { toast } from "sonner";
 import { formatCurrency, formatTime, EVENT_STATUS_CONFIG, CATEGORY_CONFIG } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
   DialogClose
 } from "@/components/ui/dialog";
@@ -28,13 +30,39 @@ interface EventDetailsModalProps {
 }
 
 export function EventDetailsModal({ event, open, onOpenChange }: EventDetailsModalProps) {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
+  const queryClient = useQueryClient();
+
+  const [cancellingParticipant, setCancellingParticipant] = useState<{ id: string, name: string, isWaitlist: boolean } | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const { data: detailsData, isLoading } = useQuery({
     queryKey: ["eventDetails", event.id],
     queryFn: async () => (await api.get(`/Events/${event.id}/details`)).data,
     enabled: open,
   });
+
+  const confirmCancelParticipant = async () => {
+    if (!cancellingParticipant) return;
+    setIsCancelling(true);
+    try {
+      const response = await api.post(`/Events/${event.id}/cancel-slot`, {
+        registrationId: cancellingParticipant.id
+      });
+      toast.success(response.data?.message || `Successfully cancelled slot for ${cancellingParticipant.name}.`);
+      queryClient.invalidateQueries({ queryKey: ["eventDetails", event.id] });
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+      queryClient.invalidateQueries({ queryKey: ["playerStatuses", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["wallet-history"] });
+      queryClient.invalidateQueries({ queryKey: ["activityLogs"] });
+      refreshUser();
+      setCancellingParticipant(null);
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || error.response?.data?.message || "Failed to cancel slot.");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   const config = EVENT_STATUS_CONFIG[event.status as EventStatus] || EVENT_STATUS_CONFIG[EventStatus.Open];
   const categoryConfig = (CATEGORY_CONFIG as any)[event.category as any] || (CATEGORY_CONFIG as any)["Beginner"] || (CATEGORY_CONFIG as any)[0];
@@ -143,45 +171,76 @@ export function EventDetailsModal({ event, open, onOpenChange }: EventDetailsMod
                         <table className="w-full text-sm text-left table-fixed">
                           <thead className="bg-muted text-muted-foreground font-semibold text-xs border-b border-border">
                             <tr>
-                              <th className="px-4 py-4 w-12 text-center">#</th>
-                              <th className="px-4 py-4 w-1/3 truncate">Player Name</th>
-                              <th className="px-4 py-4 w-1/5 truncate">Category</th>
-                              <th className="px-4 py-4 w-1/5 truncate">Status</th>
-                              <th className="px-4 py-4 w-1/4 text-right truncate">Date</th>
+                              <th className="px-3 py-4 w-10 text-center">#</th>
+                              <th className="px-3 py-4 w-1/3 truncate">Player Name</th>
+                              <th className="px-3 py-4 w-1/5 truncate">Category</th>
+                              <th className="px-3 py-4 w-1/5 truncate">Status</th>
+                              <th className="px-3 py-4 w-1/5 text-right truncate">Date</th>
+                              <th className="px-3 py-4 w-20 text-center">Action</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border/50">
-                            {confirmedPlayers.map((r: any, idx: number) => (
-                              <tr key={idx} className="hover:bg-muted/30 transition-colors bg-background">
-                                <td className="px-4 py-4 text-center text-muted-foreground">{idx + 1}</td>
-                                <td className="px-4 py-4 font-semibold text-foreground truncate" title={r.playerName}>{r.playerName}</td>
-                                <td className="px-4 py-4 text-muted-foreground truncate" title={r.playerCategory || "Unknown"}>{r.playerCategory || "Unknown"}</td>
-                                <td className="px-4 py-4 truncate">
-                                  <Badge variant="outline" className="border-court-green text-court-green bg-court-green/10 text-[10px] uppercase font-bold tracking-wider py-0.5 px-2">Registered</Badge>
-                                </td>
-                                <td className="px-4 py-4 text-right text-muted-foreground truncate font-medium">
-                                  {format(new Date(r.registrationDate), "d MMM yyyy")}
-                                </td>
-                              </tr>
-                            ))}
+                            {confirmedPlayers.map((r: any, idx: number) => {
+                              const canCancel = (user?.id === r.playerId || user?.role === "SuperAdmin" || user?.role === "Organizer");
+                              return (
+                                <tr key={idx} className="hover:bg-muted/30 transition-colors bg-background">
+                                  <td className="px-3 py-4 text-center text-muted-foreground">{idx + 1}</td>
+                                  <td className="px-3 py-4 font-semibold text-foreground truncate" title={r.playerName}>{r.playerName}</td>
+                                  <td className="px-3 py-4 text-muted-foreground truncate" title={r.playerCategory || "Unknown"}>{r.playerCategory || "Unknown"}</td>
+                                  <td className="px-3 py-4 truncate">
+                                    <Badge variant="outline" className="border-court-green text-court-green bg-court-green/10 text-[10px] uppercase font-bold tracking-wider py-0.5 px-2">Registered</Badge>
+                                  </td>
+                                  <td className="px-3 py-4 text-right text-muted-foreground truncate font-medium">
+                                    {format(new Date(r.registrationDate), "d MMM yyyy")}
+                                  </td>
+                                  <td className="px-3 py-4 text-center">
+                                    {canCancel && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 text-xs text-match-red hover:text-match-red hover:bg-match-red/10 px-2 font-medium"
+                                        onClick={() => setCancellingParticipant({ id: r.id, name: r.playerName, isWaitlist: false })}
+                                      >
+                                        Cancel
+                                      </Button>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
                       
                       {/* Mobile Cards */}
                       <div className="block md:hidden divide-y divide-border/50">
-                        {confirmedPlayers.map((r: any, idx: number) => (
-                          <div key={idx} className="p-4 flex flex-col gap-1.5 bg-background">
-                            <div className="flex justify-between items-center gap-2">
-                              <span className="font-semibold text-sm truncate text-foreground flex-1">{r.playerName}</span>
-                              <Badge variant="outline" className="border-court-green text-court-green bg-court-green/10 text-[10px] uppercase font-bold px-2 py-0 shrink-0">Registered</Badge>
+                        {confirmedPlayers.map((r: any, idx: number) => {
+                          const canCancel = (user?.id === r.playerId || user?.role === "SuperAdmin" || user?.role === "Organizer");
+                          return (
+                            <div key={idx} className="p-4 flex flex-col gap-1.5 bg-background">
+                              <div className="flex justify-between items-center gap-2">
+                                <span className="font-semibold text-sm truncate text-foreground flex-1">{r.playerName}</span>
+                                <Badge variant="outline" className="border-court-green text-court-green bg-court-green/10 text-[10px] uppercase font-bold px-2 py-0 shrink-0">Registered</Badge>
+                              </div>
+                              <div className="flex justify-between items-center text-xs text-muted-foreground">
+                                <span className="font-medium">{r.playerCategory || "Unknown"}</span>
+                                <span>Joined: {format(new Date(r.registrationDate), "d MMM yyyy")}</span>
+                              </div>
+                              {canCancel && (
+                                <div className="flex justify-end pt-1">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs text-match-red border-match-red/30 hover:bg-match-red/10 font-medium"
+                                    onClick={() => setCancellingParticipant({ id: r.id, name: r.playerName, isWaitlist: false })}
+                                  >
+                                    Cancel Slot
+                                  </Button>
+                                </div>
+                              )}
                             </div>
-                            <div className="flex justify-between items-center text-xs text-muted-foreground">
-                              <span className="font-medium">{r.playerCategory || "Unknown"}</span>
-                              <span>Joined: {format(new Date(r.registrationDate), "d MMM yyyy")}</span>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </>
                   )}
@@ -205,45 +264,76 @@ export function EventDetailsModal({ event, open, onOpenChange }: EventDetailsMod
                           <thead className="bg-muted text-muted-foreground font-semibold text-xs border-b border-border">
                             <tr>
                               <th className="px-3 py-4 w-10 text-center">#</th>
-                              <th className="px-3 py-4 w-14 text-center">Pos</th>
+                              <th className="px-3 py-4 w-12 text-center">Pos</th>
                               <th className="px-3 py-4 w-1/3 truncate">Player Name</th>
-                              <th className="px-3 py-4 w-1/4 truncate">Category</th>
-                              <th className="px-3 py-4 w-1/4 text-right truncate">Added</th>
+                              <th className="px-3 py-4 w-1/5 truncate">Category</th>
+                              <th className="px-3 py-4 w-1/5 text-right truncate">Added</th>
+                              <th className="px-3 py-4 w-20 text-center">Action</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border/50">
-                            {waitlistedPlayers.map((r: any, idx: number) => (
-                              <tr key={idx} className="hover:bg-muted/30 transition-colors bg-background">
-                                <td className="px-3 py-4 text-center text-muted-foreground">{idx + 1}</td>
-                                <td className="px-3 py-4 text-center">
-                                  <span className="font-bold text-match-red">#{r.position}</span>
-                                </td>
-                                <td className="px-3 py-4 font-semibold text-foreground truncate" title={r.playerName}>{r.playerName}</td>
-                                <td className="px-3 py-4 text-muted-foreground truncate" title={r.playerCategory || "Unknown"}>{r.playerCategory || "Unknown"}</td>
-                                <td className="px-3 py-4 text-right text-muted-foreground truncate font-medium">
-                                  {format(new Date(r.joinedDate), "d MMM yyyy")}
-                                </td>
-                              </tr>
-                            ))}
+                            {waitlistedPlayers.map((r: any, idx: number) => {
+                              const canCancel = (user?.id === r.playerId || user?.role === "SuperAdmin" || user?.role === "Organizer");
+                              return (
+                                <tr key={idx} className="hover:bg-muted/30 transition-colors bg-background">
+                                  <td className="px-3 py-4 text-center text-muted-foreground">{idx + 1}</td>
+                                  <td className="px-3 py-4 text-center">
+                                    <span className="font-bold text-match-red">#{r.position}</span>
+                                  </td>
+                                  <td className="px-3 py-4 font-semibold text-foreground truncate" title={r.playerName}>{r.playerName}</td>
+                                  <td className="px-3 py-4 text-muted-foreground truncate" title={r.playerCategory || "Unknown"}>{r.playerCategory || "Unknown"}</td>
+                                  <td className="px-3 py-4 text-right text-muted-foreground truncate font-medium">
+                                    {format(new Date(r.joinedDate), "d MMM yyyy")}
+                                  </td>
+                                  <td className="px-3 py-4 text-center">
+                                    {canCancel && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 text-xs text-match-red hover:text-match-red hover:bg-match-red/10 px-2 font-medium"
+                                        onClick={() => setCancellingParticipant({ id: r.id, name: r.playerName, isWaitlist: true })}
+                                      >
+                                        Cancel
+                                      </Button>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
                       
                       {/* Mobile Cards */}
                       <div className="block md:hidden divide-y divide-border/50">
-                        {waitlistedPlayers.map((r: any, idx: number) => (
-                          <div key={idx} className="p-4 flex flex-col gap-1.5 bg-background">
-                            <div className="flex justify-between items-center gap-2">
-                              <span className="font-semibold text-sm truncate text-foreground flex-1 flex items-center">
-                                <span className="font-bold text-match-red mr-2">#{r.position}</span> {r.playerName}
-                              </span>
+                        {waitlistedPlayers.map((r: any, idx: number) => {
+                          const canCancel = (user?.id === r.playerId || user?.role === "SuperAdmin" || user?.role === "Organizer");
+                          return (
+                            <div key={idx} className="p-4 flex flex-col gap-1.5 bg-background">
+                              <div className="flex justify-between items-center gap-2">
+                                <span className="font-semibold text-sm truncate text-foreground flex-1 flex items-center">
+                                  <span className="font-bold text-match-red mr-2">#{r.position}</span> {r.playerName}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center text-xs text-muted-foreground pl-6">
+                                <span className="font-medium">{r.playerCategory || "Unknown"}</span>
+                                <span>Added: {format(new Date(r.joinedDate), "d MMM yyyy")}</span>
+                              </div>
+                              {canCancel && (
+                                <div className="flex justify-end pt-1">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs text-match-red border-match-red/30 hover:bg-match-red/10 font-medium"
+                                    onClick={() => setCancellingParticipant({ id: r.id, name: r.playerName, isWaitlist: true })}
+                                  >
+                                    Cancel Slot
+                                  </Button>
+                                </div>
+                              )}
                             </div>
-                            <div className="flex justify-between items-center text-xs text-muted-foreground pl-6">
-                              <span className="font-medium">{r.playerCategory || "Unknown"}</span>
-                              <span>Added: {format(new Date(r.joinedDate), "d MMM yyyy")}</span>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </>
                   </div>
@@ -262,6 +352,55 @@ export function EventDetailsModal({ event, open, onOpenChange }: EventDetailsMod
           </DialogFooter>
         </div>
       </DialogContent>
+
+      {/* Individual Slot Cancel Confirmation Dialog */}
+      <Dialog open={!!cancellingParticipant} onOpenChange={(open) => !open && !isCancelling && setCancellingParticipant(null)}>
+        <DialogContent className="max-w-md p-6 bg-surface border-border/50 z-50">
+          <DialogHeader className="mb-2">
+            <DialogTitle className="text-xl font-heading font-bold text-foreground flex items-center gap-2 text-match-red">
+              <XCircle className="h-5 w-5" /> Cancel Participant Slot
+            </DialogTitle>
+            <DialogDescription className="text-sm text-foreground pt-2">
+              Are you sure you want to cancel the {cancellingParticipant?.isWaitlist ? "waitlist" : "confirmed"} slot for <span className="font-bold text-foreground">{cancellingParticipant?.name}</span>?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="text-xs text-muted-foreground bg-muted/60 p-3 rounded-lg border border-border/50 space-y-1.5 my-2">
+            {!cancellingParticipant?.isWaitlist ? (
+              <>
+                <div className="flex justify-between text-foreground font-semibold">
+                  <span>Refund Amount:</span>
+                  <span className="text-court-green">
+                    {new Date() >= new Date(event.cutoffDateTime) ? "$0.00 CAD" : formatCurrency(event.reservedFee)}
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {new Date() >= new Date(event.cutoffDateTime) 
+                    ? "* Cut-off time has passed. Cancellation is blocked or non-refundable."
+                    : "The reserved fee will be refunded to the payer's wallet balance immediately, and the first eligible waitlisted player will be promoted."}
+                </p>
+              </>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                This participant will be removed from the waiting list.
+              </p>
+            )}
+          </div>
+          <DialogFooter className="flex sm:justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setCancellingParticipant(null)} disabled={isCancelling} className="w-full sm:w-auto font-semibold">
+              Keep Slot
+            </Button>
+            <Button variant="destructive" onClick={confirmCancelParticipant} disabled={isCancelling} className="w-full sm:w-auto font-semibold">
+              {isCancelling ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Cancelling...
+                </>
+              ) : (
+                "Confirm Cancel"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
