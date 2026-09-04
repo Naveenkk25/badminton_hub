@@ -13,7 +13,12 @@ using BadmintonHub.Domain.Enums;
 
 namespace BadmintonHub.Application.Features.Reports.Queries.GetEventFinancialSummary;
 
-public record GetEventFinancialSummaryQuery(int Year, int Month, string Format = "excel") : IRequest<ReportExportVm?>;
+public record GetEventFinancialSummaryQuery(
+    int Year, 
+    int Month, 
+    string Format = "excel", 
+    string? UserId = null, 
+    bool IsSuperAdmin = true) : IRequest<ReportExportVm?>;
 
 public class GetEventFinancialSummaryQueryHandler : IRequestHandler<GetEventFinancialSummaryQuery, ReportExportVm?>
 {
@@ -33,10 +38,25 @@ public class GetEventFinancialSummaryQueryHandler : IRequestHandler<GetEventFina
         var startDate = new DateTime(request.Year, request.Month, 1);
         var endDate = startDate.AddMonths(1);
 
-        // Fetch events in selected month (handling both UTC and local DateTime representations)
-        var events = await _context.Events
+        // Fetch completed events in selected month (cancelled and non-completed events are excluded)
+        var query = _context.Events
             .Include(e => e.Registrations)
-            .Where(e => !e.IsDeleted && e.EventDate >= startDate && e.EventDate < endDate)
+            .Where(e => !e.IsDeleted && e.Status == EventStatus.Completed && e.EventDate >= startDate && e.EventDate < endDate);
+
+        if (!request.IsSuperAdmin && !string.IsNullOrEmpty(request.UserId) && Guid.TryParse(request.UserId, out var userId))
+        {
+            var user = await _context.Users.FindAsync(new object[] { userId }, cancellationToken);
+            if (user != null)
+            {
+                var org = await _context.Organizers.FirstOrDefaultAsync(o => o.ContactNumber == user.PhoneNumber, cancellationToken);
+                if (org != null)
+                {
+                    query = query.Where(e => e.OrganizerId == org.Id);
+                }
+            }
+        }
+
+        var events = await query
             .OrderBy(e => e.EventDate)
             .ToListAsync(cancellationToken);
 

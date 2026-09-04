@@ -37,12 +37,15 @@ public class ReportsController : ApiControllerBase
             return BadRequest(new { message = "Invalid year or month specified." });
         }
 
-        var query = new GetEventFinancialSummaryQuery(year, month, format);
+        var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        bool isSuperAdmin = User.IsInRole("SuperAdmin");
+
+        var query = new GetEventFinancialSummaryQuery(year, month, format, userIdString, isSuperAdmin);
         var result = await Mediator.Send(query);
 
         if (result == null)
         {
-            return NotFound(new { message = "No events found for this month." });
+            return NotFound(new { message = "No completed events found for this month." });
         }
 
         Response.Headers.Append("Content-Disposition", $"attachment; filename={result.FileName}");

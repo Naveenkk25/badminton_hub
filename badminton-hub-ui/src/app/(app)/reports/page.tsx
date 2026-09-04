@@ -53,7 +53,7 @@ export default function ReportsPage() {
       if (response.data.type === "application/json") {
         const text = await response.data.text();
         const json = JSON.parse(text);
-        toast.info(json.message || "No events found for this month.");
+        toast.info(json.message || "No completed events found for this month.");
         return;
       }
 
@@ -73,12 +73,12 @@ export default function ReportsPage() {
       toast.success(`${formatType.toUpperCase()} report downloaded successfully!`);
     } catch (error: any) {
       if (error.response?.status === 404) {
-        toast.info("No events found for this month.");
+        toast.info(error.response?.data?.message || "No completed events found for this month.");
       } else if (error.response?.data instanceof Blob) {
         try {
           const text = await error.response.data.text();
           const json = JSON.parse(text);
-          toast.info(json.message || "No events found for this month.");
+          toast.info(json.message || "No completed events found for this month.");
         } catch {
           toast.error(`Failed to download ${formatType.toUpperCase()} report.`);
         }
@@ -119,7 +119,7 @@ export default function ReportsPage() {
             <div>
               <CardTitle className="text-xl">Event Financial Summary</CardTitle>
               <CardDescription>
-                Month-wise statement per event detailing registrations, collections, refunds, and net revenue. Available in Excel (.xlsx) and PDF (.pdf).
+                Month-wise statement per completed event detailing registrations, collections, refunds, and net revenue. Available in Excel (.xlsx) and PDF (.pdf).
               </CardDescription>
             </div>
           </div>
