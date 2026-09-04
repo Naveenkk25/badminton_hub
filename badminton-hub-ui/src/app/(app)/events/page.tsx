@@ -58,6 +58,7 @@ export default function EventsPage() {
   const [selectedEvent, setSelectedEvent] = useState<EventDto | null>(null);
   const [eventToCancel, setEventToCancel] = useState<{event: EventDto, status: string} | null>(null);
   const [selectedSlotIdsToCancel, setSelectedSlotIdsToCancel] = useState<string[]>([]);
+  const [isCancellingSlot, setIsCancellingSlot] = useState(false);
   const [eventToCancelEntire, setEventToCancelEntire] = useState<EventDto | null>(null);
   const [isCancellingEvent, setIsCancellingEvent] = useState(false);
 
@@ -84,7 +85,9 @@ export default function EventsPage() {
       }
     } else if (action === "cancel") {
       const status = getUserStatus(event.id)?.status || "registered";
-      const mySlots = userStatuses.filter(u => u.eventId?.toLowerCase() === event.id?.toLowerCase());
+      const mySlots = Array.isArray(userStatuses)
+        ? userStatuses.filter(u => u?.eventId && event?.id && u.eventId.toLowerCase() === event.id.toLowerCase())
+        : [];
       setEventToCancel({ event, status });
       setSelectedSlotIdsToCancel(mySlots.map(s => s.registrationId).filter(Boolean));
     } else if (action === "edit") {
@@ -101,12 +104,16 @@ export default function EventsPage() {
 
   const confirmCancel = async () => {
     if (!eventToCancel) return;
+    setIsCancellingSlot(true);
     try {
-      const mySlots = userStatuses.filter(u => u.eventId?.toLowerCase() === eventToCancel.event.id?.toLowerCase());
+      const mySlots = Array.isArray(userStatuses)
+        ? userStatuses.filter(u => u?.eventId && eventToCancel?.event?.id && u.eventId.toLowerCase() === eventToCancel.event.id.toLowerCase())
+        : [];
       let payload: any = {};
       if (mySlots.length > 1) {
         if (selectedSlotIdsToCancel.length === 0) {
           toast.error("Please select at least one slot to cancel.");
+          setIsCancellingSlot(false);
           return;
         }
         if (selectedSlotIdsToCancel.length === mySlots.length) {
@@ -127,9 +134,10 @@ export default function EventsPage() {
       queryClient.invalidateQueries({ queryKey: ["activityLogs"] });
       refreshUser();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || "Failed to cancel slot");
+      toast.error(error.response?.data?.error || error.response?.data?.message || "Failed to cancel slot");
       console.error(error);
     } finally {
+      setIsCancellingSlot(false);
       setEventToCancel(null);
       setSelectedSlotIdsToCancel([]);
     }
@@ -155,15 +163,14 @@ export default function EventsPage() {
   };
 
   const getUserStatus = (eventId: string) => {
-    const s = userStatuses.find(u => u.eventId.toLowerCase() === eventId.toLowerCase());
-    if (s) {
-      console.log(`Matched status for event ${eventId}:`, s);
-    }
+    if (!Array.isArray(userStatuses)) return null;
+    const s = userStatuses.find(u => u?.eventId && u.eventId.toLowerCase() === eventId.toLowerCase());
     return s || null;
   };
 
   const getUserBookedCount = (eventId: string) => {
-    return userStatuses.filter(u => u.eventId.toLowerCase() === eventId.toLowerCase()).length || 1;
+    if (!Array.isArray(userStatuses)) return 1;
+    return userStatuses.filter(u => u?.eventId && u.eventId.toLowerCase() === eventId.toLowerCase()).length || 1;
   };
 
   // Filter logic
@@ -324,31 +331,34 @@ export default function EventsPage() {
         event={eventToSettle}
       />
 
-      <Dialog open={!!eventToCancel} onOpenChange={(open) => !open && setEventToCancel(null)}>
-        <DialogContent className="max-w-md p-6 bg-surface border-border/50">
-          <DialogHeader className="mb-2">
-            <DialogTitle className="text-xl font-heading font-bold text-foreground">
-              {eventToCancel?.status === "waitlisted" ? "Cancel Waitlist" : "Cancel Slot"}
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              Confirm cancellation of registration
-            </DialogDescription>
-            <div className="pt-3 text-base text-foreground font-medium">
-              <span className="flex items-start text-match-red mb-3">
-                <XCircle className="h-5 w-5 mr-2 shrink-0" /> 
-                {eventToCancel?.status === "waitlisted" 
-                  ? "Are you sure you want to cancel your waitlist registration?"
-                  : "Are you sure you want to cancel your registration?"}
-              </span>
-              {eventToCancel && (() => {
-                const eventSlots = userStatuses.filter(u => u.eventId?.toLowerCase() === eventToCancel.event.id?.toLowerCase());
-                const selectedRegisteredCount = eventSlots.length > 1 
-                  ? eventSlots.filter(s => selectedSlotIdsToCancel.includes(s.registrationId) && s.status === "registered").length
-                  : (eventToCancel.status === "registered" ? 1 : 0);
-                const isAfterCutoff = new Date() >= new Date(eventToCancel.event.cutoffDateTime);
-                const refundTotal = isAfterCutoff ? 0 : eventToCancel.event.reservedFee * selectedRegisteredCount;
+      <Dialog open={!!eventToCancel} onOpenChange={(open) => !open && !isCancellingSlot && setEventToCancel(null)}>
+        {eventToCancel && (() => {
+          const eventSlots = Array.isArray(userStatuses) 
+            ? userStatuses.filter(u => u?.eventId && eventToCancel.event?.id && u.eventId.toLowerCase() === eventToCancel.event.id.toLowerCase())
+            : [];
+          const selectedRegisteredCount = eventSlots.length > 1 
+            ? eventSlots.filter(s => selectedSlotIdsToCancel.includes(s.registrationId) && s.status === "registered").length
+            : (eventToCancel.status === "registered" ? 1 : 0);
+          const isAfterCutoff = new Date() >= new Date(eventToCancel.event.cutoffDateTime);
+          const refundTotal = isAfterCutoff ? 0 : eventToCancel.event.reservedFee * selectedRegisteredCount;
 
-                return (
+          return (
+            <DialogContent className="max-w-md p-6 bg-surface border-border/50">
+              <DialogHeader className="mb-2">
+                <DialogTitle className="text-xl font-heading font-bold text-foreground">
+                  {eventToCancel.status === "waitlisted" ? "Cancel Waitlist" : "Cancel Slot"}
+                </DialogTitle>
+                <DialogDescription className="sr-only">
+                  Confirm cancellation of registration
+                </DialogDescription>
+                <div className="pt-3 text-base text-foreground font-medium">
+                  <span className="flex items-start text-match-red mb-3">
+                    <XCircle className="h-5 w-5 mr-2 shrink-0" /> 
+                    {eventToCancel.status === "waitlisted" 
+                      ? "Are you sure you want to cancel your waitlist registration?"
+                      : "Are you sure you want to cancel your registration?"}
+                  </span>
+                  
                   <div className="text-sm text-foreground bg-muted/80 p-4 rounded-lg border border-border/50 space-y-2 mb-2">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Event:</span>
@@ -442,24 +452,30 @@ export default function EventsPage() {
                       </div>
                     )}
                   </div>
-                );
-              })()}
-            </div>
-          </DialogHeader>
-          <DialogFooter className="flex sm:justify-end gap-3 mt-4">
-            <Button variant="outline" onClick={() => setEventToCancel(null)} className="w-full sm:w-auto font-semibold">
-              Keep {eventToCancel?.status === "waitlisted" ? "Waitlist" : "Registration"}
-            </Button>
-            <Button 
-              variant="destructive" 
-              onClick={confirmCancel} 
-              disabled={userStatuses.filter(u => u.eventId?.toLowerCase() === eventToCancel?.event.id?.toLowerCase()).length > 1 && selectedSlotIdsToCancel.length === 0}
-              className="w-full sm:w-auto font-semibold"
-            >
-              Cancel {selectedSlotIdsToCancel.length > 0 ? `${selectedSlotIdsToCancel.length} Slot${selectedSlotIdsToCancel.length > 1 ? 's' : ''}` : "Slot"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
+                </div>
+              </DialogHeader>
+              <DialogFooter className="flex sm:justify-end gap-3 mt-4">
+                <Button variant="outline" onClick={() => setEventToCancel(null)} disabled={isCancellingSlot} className="w-full sm:w-auto font-semibold">
+                  Keep {eventToCancel.status === "waitlisted" ? "Waitlist" : "Registration"}
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  onClick={confirmCancel} 
+                  disabled={isCancellingSlot || (eventSlots.length > 1 && selectedSlotIdsToCancel.length === 0)}
+                  className="w-full sm:w-auto font-semibold"
+                >
+                  {isCancellingSlot ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Cancelling...
+                    </>
+                  ) : (
+                    `Cancel ${selectedSlotIdsToCancel.length > 0 ? `${selectedSlotIdsToCancel.length} Slot${selectedSlotIdsToCancel.length > 1 ? 's' : ''}` : "Slot"}`
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          );
+        })()}
       </Dialog>
 
       {/* Organizer/SuperAdmin Cancel Event Confirmation Dialog */}
