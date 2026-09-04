@@ -63,6 +63,14 @@ export default function LoginPage() {
     }
   };
 
+  if (isLoading || isAuthenticated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-court-blue" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen bg-background">
       {/* Left Side: Decorative (Hidden on mobile) */}

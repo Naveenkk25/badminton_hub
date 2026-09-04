@@ -77,8 +77,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        // Set global Authorization header
+        // Set global Authorization header and populate React state immediately
         api.defaults.headers.common["Authorization"] = `Bearer ${currentToken}`;
+        if (isMounted) {
+          setToken(currentToken);
+          try {
+            const cached = localStorage.getItem("bh_user") || sessionStorage.getItem("bh_user");
+            if (cached) {
+              setUser(JSON.parse(cached));
+            }
+          } catch {}
+        }
 
         // If access token is expired or close to expiring (< 2 minutes), refresh it first
         if (isTokenExpired(currentToken, 120)) {
