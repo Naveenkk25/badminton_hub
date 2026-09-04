@@ -87,11 +87,17 @@ export function CreateEventDrawer({ open, onOpenChange, eventToEdit }: CreateEve
   const { data: orgData } = useQuery({
     queryKey: ["my-org-info", user?.id],
     queryFn: async () => {
-      if (!user?.phoneNumber) return null;
-      const response = await api.get("/Organizers");
-      return response.data.find((item: any) => item.org.contactNumber === user.phoneNumber)?.org;
+      if (!user?.phoneNumber && !user?.id) return null;
+      const response = await api.get("/Organizers?pageSize=100");
+      const list = response.data.data || response.data || [];
+      const match = list.find((item: any) => {
+        const contact = item?.org?.contactNumber || item?.contactNumber;
+        const orgUserId = item?.org?.userId || item?.userId || item?.user?.id;
+        return (user?.phoneNumber && contact === user.phoneNumber) || (user?.id && orgUserId === user.id);
+      });
+      return match?.org || match || null;
     },
-    enabled: !!user?.phoneNumber && user?.role === "Organizer"
+    enabled: (!!user?.phoneNumber || !!user?.id) && user?.role === "Organizer"
   });
 
   const onSubmit = async (data: any) => {

@@ -47,7 +47,8 @@ export function CreateOrganizerDrawer({ open, onOpenChange }: CreateOrganizerDra
         contactNumber: data.contactNumber
       });
       toast.success("Organizer added successfully!");
-      queryClient.invalidateQueries({ queryKey: ["organizers"] });
+      await queryClient.invalidateQueries({ queryKey: ["organizers"] });
+      await queryClient.refetchQueries({ queryKey: ["organizers"] });
       
       if (response.data && response.data.temporaryPassword) {
         setCreatedPassword(response.data.temporaryPassword);
@@ -66,7 +67,11 @@ export function CreateOrganizerDrawer({ open, onOpenChange }: CreateOrganizerDra
 
   return (
     <Sheet open={open} onOpenChange={(val) => {
-      if (!val) setCreatedPassword(null);
+      if (!val) {
+        setCreatedPassword(null);
+        queryClient.invalidateQueries({ queryKey: ["organizers"] });
+        queryClient.refetchQueries({ queryKey: ["organizers"] });
+      }
       onOpenChange(val);
     }}>
       <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
@@ -99,7 +104,14 @@ export function CreateOrganizerDrawer({ open, onOpenChange }: CreateOrganizerDra
                 Copy
               </Button>
             </div>
-            <Button className="w-full mt-4 bg-court-blue hover:bg-court-blue-light text-white" onClick={() => onOpenChange(false)}>
+            <Button 
+              className="w-full mt-4 bg-court-blue hover:bg-court-blue-light text-white" 
+              onClick={() => {
+                queryClient.invalidateQueries({ queryKey: ["organizers"] });
+                queryClient.refetchQueries({ queryKey: ["organizers"] });
+                onOpenChange(false);
+              }}
+            >
               Done
             </Button>
           </div>

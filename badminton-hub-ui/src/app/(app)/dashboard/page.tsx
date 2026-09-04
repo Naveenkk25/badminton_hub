@@ -23,13 +23,39 @@ export default function DashboardPage() {
   const { user } = useAuth();
 
   // Organizers (Super Admin only)
-  const { data: organizers = [] } = useQuery({
+  const { data: rawOrganizers = [] } = useQuery({
     queryKey: ["organizers"],
     queryFn: async () => {
-      const res = await api.get("/Organizers");
-      return res.data.data || res.data;
+      const res = await api.get("/Organizers?pageSize=100");
+      const list = res.data.data || res.data || [];
+      return Array.isArray(list) ? list.map((item: any) => {
+        if (item?.org) {
+          return {
+            ...item.org,
+            status: item.user?.status ?? item.org?.status ?? "Active",
+            userId: item.user?.id ?? item.org?.userId,
+            org: item.org,
+            user: item.user,
+          };
+        }
+        return item;
+      }) : [];
     },
     enabled: user?.role === "SuperAdmin",
+    staleTime: 0,
+  });
+
+  const organizers = (rawOrganizers || []).map((item: any) => {
+    if (item?.org) {
+      return {
+        ...item.org,
+        status: item.user?.status ?? item.org?.status ?? "Active",
+        userId: item.user?.id ?? item.org?.userId,
+        org: item.org,
+        user: item.user,
+      };
+    }
+    return item;
   });
 
   // Players (Super Admin only)
@@ -55,9 +81,13 @@ export default function DashboardPage() {
   const { data: orgData } = useQuery({
     queryKey: ["my-org-info", user?.id],
     queryFn: async () => {
-      const response = await api.get("/Organizers");
-      const list = response.data.data || response.data;
-      return list.find((item: any) => item.org.contactNumber === user?.phoneNumber)?.org;
+      const response = await api.get("/Organizers?pageSize=100");
+      const list = response.data.data || response.data || [];
+      const match = list.find((item: any) => {
+        const contact = item?.org?.contactNumber || item?.contactNumber;
+        return contact === user?.phoneNumber;
+      });
+      return match?.org || match || null;
     },
     enabled: !!user?.phoneNumber && user?.role === "Organizer",
   });
@@ -110,8 +140,8 @@ export default function DashboardPage() {
   // Helper for Super Admin organizer lookup
   const getOrganizerName = (organizerId: string, fallbackName?: string) => {
     if (fallbackName) return fallbackName;
-    const match = organizers.find((o: any) => o.org?.id === organizerId);
-    return match?.org?.name || match?.user?.fullName || "Organizer";
+    const match = organizers.find((o: any) => (o.org?.id || o.id) === organizerId);
+    return match?.name || match?.org?.name || match?.user?.fullName || "Organizer";
   };
 
   // -------------------------------------------------------------

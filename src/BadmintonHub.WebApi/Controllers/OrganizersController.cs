@@ -28,7 +28,7 @@ public class OrganizersController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<object>> GetOrganizers([FromQuery] int page = 1, [FromQuery] int pageSize = 25)
+    public async Task<ActionResult<object>> GetOrganizers([FromQuery] int page = 1, [FromQuery] int pageSize = 100)
     {
         var query = _context.Organizers;
         var totalCount = await query.CountAsync();
@@ -43,7 +43,7 @@ public class OrganizersController : ControllerBase
         foreach (var org in orgs)
         {
             var user = await _context.Users
-                .FirstOrDefaultAsync(u => u.Role == UserRole.Organizer && u.PhoneNumber == org.ContactNumber);
+                .FirstOrDefaultAsync(u => u.Id == org.UserId || (u.Role == UserRole.Organizer && u.PhoneNumber == org.ContactNumber));
             result.Add(new
             {
                 org = org,
@@ -60,7 +60,7 @@ public class OrganizersController : ControllerBase
         if (org == null) return NotFound();
 
         var user = await _context.Users
-            .FirstOrDefaultAsync(u => u.Role == UserRole.Organizer && u.PhoneNumber == org.ContactNumber);
+            .FirstOrDefaultAsync(u => u.Id == org.UserId || (u.Role == UserRole.Organizer && u.PhoneNumber == org.ContactNumber));
 
         return Ok(new
         {

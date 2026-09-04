@@ -33,25 +33,32 @@ export default function OrganizersPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  const { data: organizers = [], isLoading } = useQuery<OrganizerDto[]>({
+  const { data: rawOrganizers = [], isLoading } = useQuery<any[]>({
     queryKey: ["organizers"],
     queryFn: async () => {
-      const response = await api.get("/Organizers");
-      const list = response.data.data || response.data;
-      return list.map((item: any) => {
-        if (item.org) {
-          return { ...item.org, status: item.user?.status ?? "Active", userId: item.user?.id };
+      const response = await api.get("/Organizers?pageSize=100");
+      const list = response.data.data || response.data || [];
+      return Array.isArray(list) ? list.map((item: any) => {
+        if (item?.org) {
+          return {
+            ...item.org,
+            status: item.user?.status ?? item.org?.status ?? "Active",
+            userId: item.user?.id ?? item.org?.userId,
+          };
         }
         return item;
-      });
+      }) : [];
     },
     enabled: !!user,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const deactivateMutation = useMutation({
     mutationFn: (id: string) => api.post(`/Organizers/${id}/suspend`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["organizers"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["organizers"] });
+      await queryClient.refetchQueries({ queryKey: ["organizers"] });
       toast.success("Organizer deactivated successfully");
     },
     onError: () => toast.error("Failed to deactivate organizer"),
@@ -59,24 +66,38 @@ export default function OrganizersPage() {
 
   const activateMutation = useMutation({
     mutationFn: (id: string) => api.post(`/Organizers/${id}/activate`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["organizers"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["organizers"] });
+      await queryClient.refetchQueries({ queryKey: ["organizers"] });
       toast.success("Organizer activated successfully");
     },
     onError: () => toast.error("Failed to activate organizer"),
   });
 
-  const filteredOrganizers = organizers.filter(
-    (o) => o.name?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Defensive normalization in case cached data has un-flattened { org, user } objects
+  const organizers: OrganizerDto[] = (rawOrganizers || []).map((item: any) => {
+    if (item?.org) {
+      return {
+        ...item.org,
+        status: item.user?.status ?? item.org?.status ?? "Active",
+        userId: item.user?.id ?? item.org?.userId,
+      };
+    }
+    return item;
+  });
 
+  const filteredOrganizers = organizers.filter(
+    (o) => (o.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+           (o.contactNumber || "").includes(searchQuery)
+  );
 
   const handleEditOrganizer = async (data: any) => {
     if (!selectedOrg) return;
     try {
       await api.put(`/Organizers/${selectedOrg.id}`, { name: data.name, contactNumber: data.contactNumber });
       toast.success("Organizer updated successfully");
-      queryClient.invalidateQueries({ queryKey: ["organizers"] });
+      await queryClient.invalidateQueries({ queryKey: ["organizers"] });
+      await queryClient.refetchQueries({ queryKey: ["organizers"] });
       setIsEditDrawerOpen(false);
     } catch (error) {
       toast.error("Failed to update organizer");
