@@ -15,6 +15,22 @@ export const metadata: Metadata = {
   title: "Badminton Hub",
   description: "Professional Tournament & Player Management Platform",
   manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon.png", type: "image/png", sizes: "64x64" },
+      { url: "/icons/icon-192x192.png", type: "image/png", sizes: "192x192" },
+      { url: "/icons/icon-512x512.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Badminton Hub",
+  },
 };
 
 export const viewport = {
