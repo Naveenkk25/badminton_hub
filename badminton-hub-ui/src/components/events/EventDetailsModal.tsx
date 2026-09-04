@@ -71,8 +71,9 @@ export function EventDetailsModal({ event, open, onOpenChange }: EventDetailsMod
   const waitlistedPlayers = detailsData?.waitlist || [];
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full h-[100dvh] sm:h-auto max-w-none sm:max-w-[95vw] lg:max-w-6xl p-0 overflow-hidden bg-background border-border/50 shadow-2xl rounded-none sm:rounded-2xl flex flex-col gap-0">
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="w-full h-[100dvh] sm:h-auto max-w-none sm:max-w-[95vw] lg:max-w-6xl p-0 overflow-hidden bg-background border-border/50 shadow-2xl rounded-none sm:rounded-2xl flex flex-col gap-0">
         <div className="absolute left-0 top-0 bottom-0 w-2 z-30" style={{ backgroundColor: config.border }} />
         
         {/* Sticky Header */}
@@ -352,55 +353,56 @@ export function EventDetailsModal({ event, open, onOpenChange }: EventDetailsMod
           </DialogFooter>
         </div>
       </DialogContent>
+    </Dialog>
 
-      {/* Individual Slot Cancel Confirmation Dialog */}
-      <Dialog open={!!cancellingParticipant} onOpenChange={(open) => !open && !isCancelling && setCancellingParticipant(null)}>
-        <DialogContent className="max-w-md p-6 bg-surface border-border/50 z-50">
-          <DialogHeader className="mb-2">
-            <DialogTitle className="text-xl font-heading font-bold text-foreground flex items-center gap-2 text-match-red">
-              <XCircle className="h-5 w-5" /> Cancel Participant Slot
-            </DialogTitle>
-            <DialogDescription className="text-sm text-foreground pt-2">
-              Are you sure you want to cancel the {cancellingParticipant?.isWaitlist ? "waitlist" : "confirmed"} slot for <span className="font-bold text-foreground">{cancellingParticipant?.name}</span>?
-            </DialogDescription>
-          </DialogHeader>
-          <div className="text-xs text-muted-foreground bg-muted/60 p-3 rounded-lg border border-border/50 space-y-1.5 my-2">
-            {!cancellingParticipant?.isWaitlist ? (
+    {/* Individual Slot Cancel Confirmation Dialog */}
+    <Dialog open={!!cancellingParticipant} onOpenChange={(open) => !open && !isCancelling && setCancellingParticipant(null)}>
+      <DialogContent className="max-w-md p-6 bg-surface border-border/50 z-50">
+        <DialogHeader className="mb-2">
+          <DialogTitle className="text-xl font-heading font-bold text-foreground flex items-center gap-2 text-match-red">
+            <XCircle className="h-5 w-5" /> Cancel Participant Slot
+          </DialogTitle>
+          <DialogDescription className="text-sm text-foreground pt-2">
+            Are you sure you want to cancel the {cancellingParticipant?.isWaitlist ? "waitlist" : "confirmed"} slot for <span className="font-bold text-foreground">{cancellingParticipant?.name}</span>?
+          </DialogDescription>
+        </DialogHeader>
+        <div className="text-xs text-muted-foreground bg-muted/60 p-3 rounded-lg border border-border/50 space-y-1.5 my-2">
+          {!cancellingParticipant?.isWaitlist ? (
+            <>
+              <div className="flex justify-between text-foreground font-semibold">
+                <span>Refund Amount:</span>
+                <span className="text-court-green">
+                  {new Date() >= new Date(event.cutoffDateTime) ? "$0.00 CAD" : formatCurrency(event.reservedFee)}
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {new Date() >= new Date(event.cutoffDateTime) 
+                  ? "* Cut-off time has passed. Cancellation is blocked or non-refundable."
+                  : "The reserved fee will be refunded to the payer's wallet balance immediately, and the first eligible waitlisted player will be promoted."}
+              </p>
+            </>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">
+              This participant will be removed from the waiting list.
+            </p>
+          )}
+        </div>
+        <DialogFooter className="flex sm:justify-end gap-3 mt-4">
+          <Button variant="outline" onClick={() => setCancellingParticipant(null)} disabled={isCancelling} className="w-full sm:w-auto font-semibold">
+            Keep Slot
+          </Button>
+          <Button variant="destructive" onClick={confirmCancelParticipant} disabled={isCancelling} className="w-full sm:w-auto font-semibold">
+            {isCancelling ? (
               <>
-                <div className="flex justify-between text-foreground font-semibold">
-                  <span>Refund Amount:</span>
-                  <span className="text-court-green">
-                    {new Date() >= new Date(event.cutoffDateTime) ? "$0.00 CAD" : formatCurrency(event.reservedFee)}
-                  </span>
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  {new Date() >= new Date(event.cutoffDateTime) 
-                    ? "* Cut-off time has passed. Cancellation is blocked or non-refundable."
-                    : "The reserved fee will be refunded to the payer's wallet balance immediately, and the first eligible waitlisted player will be promoted."}
-                </p>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Cancelling...
               </>
             ) : (
-              <p className="text-[11px] text-muted-foreground">
-                This participant will be removed from the waiting list.
-              </p>
+              "Confirm Cancel"
             )}
-          </div>
-          <DialogFooter className="flex sm:justify-end gap-3 mt-4">
-            <Button variant="outline" onClick={() => setCancellingParticipant(null)} disabled={isCancelling} className="w-full sm:w-auto font-semibold">
-              Keep Slot
-            </Button>
-            <Button variant="destructive" onClick={confirmCancelParticipant} disabled={isCancelling} className="w-full sm:w-auto font-semibold">
-              {isCancelling ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Cancelling...
-                </>
-              ) : (
-                "Confirm Cancel"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
     </Dialog>
-  );
+  </>
+);
 }
