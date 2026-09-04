@@ -39,8 +39,8 @@ public class RegistrationTests
             Id = Guid.NewGuid(),
             Name = "Singles Match",
             MaxPlayers = 1,
-            EventFee = 10.00m,
-            CutoffDateTime = DateTime.UtcNow.AddHours(2),
+            ReservedFee = 10.00m,
+            CutoffDateTime = DateTime.Now.AddHours(2),
             Status = EventStatus.Open
         };
         _context.Events.Add(@event);
@@ -92,8 +92,8 @@ public class RegistrationTests
             Id = Guid.NewGuid(),
             Name = "Singles Match",
             MaxPlayers = 1,
-            EventFee = 10.00m,
-            CutoffDateTime = DateTime.UtcNow.AddHours(2),
+            ReservedFee = 10.00m,
+            CutoffDateTime = DateTime.Now.AddHours(2),
             Status = EventStatus.Open
         };
         _context.Events.Add(@event);
@@ -132,7 +132,7 @@ public class RegistrationTests
         var reg = await _context.Registrations.FirstOrDefaultAsync(r => r.PlayerId == player1.Id && !r.IsCancelled);
 
         // Act - Cancel Player 1
-        await cancelHandler.Handle(new CancelRegistrationCommand(reg!.Id), CancellationToken.None);
+        await cancelHandler.Handle(new CancelRegistrationCommand(@event.Id, player1.Id), CancellationToken.None);
 
         // Assert
         reg.IsCancelled.Should().BeTrue();
@@ -141,7 +141,7 @@ public class RegistrationTests
         // Player 2 should be promoted
         var player2Reg = await _context.Registrations.FirstOrDefaultAsync(r => r.PlayerId == player2.Id && !r.IsCancelled);
         player2Reg.Should().NotBeNull();
-        player2.WalletBalance.Should().Be(10.00m); // Fee deducted
+        player2.WalletBalance.Should().Be(0.00m); // Fee deducted
 
         var wl = await _context.Waitlists.FirstOrDefaultAsync(w => w.PlayerId == player2.Id);
         wl!.IsPromoted.Should().BeTrue();

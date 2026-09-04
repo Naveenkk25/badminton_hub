@@ -77,6 +77,7 @@ public class AuthController : ControllerBase
             return Ok(new
             {
                 token,
+                refreshToken,
                 id = user.Id,
                 fullName = user.FullName,
                 mobileNumber = user.UserName,
@@ -92,6 +93,7 @@ public class AuthController : ControllerBase
         return Ok(new
         {
             token,
+            refreshToken,
             id = user.Id,
             fullName = user.FullName,
             mobileNumber = user.UserName,
@@ -154,15 +156,30 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("refresh")]
-    public async Task<IActionResult> Refresh()
+    public async Task<IActionResult> Refresh([FromBody] RefreshTokenModel? model)
     {
-        var refreshToken = Request.Cookies["refreshToken"];
+        var refreshToken = model?.RefreshToken;
+        if (string.IsNullOrEmpty(refreshToken))
+        {
+            refreshToken = Request.Cookies["refreshToken"];
+        }
+
         if (string.IsNullOrEmpty(refreshToken)) return Unauthorized(new { error = "Refresh token is missing." });
 
         var user = _context.Users.FirstOrDefault(u => u.RefreshToken == refreshToken);
         if (user == null || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
         {
             return Unauthorized(new { error = "Invalid or expired refresh token." });
+        }
+
+        if (user.Status == UserStatus.Suspended)
+        {
+            return StatusCode(403, new { error = "Account suspended reach out Admin", message = "Account suspended reach out Admin" });
+        }
+
+        if (user.Status == UserStatus.Inactive)
+        {
+            return StatusCode(403, new { error = "Account is inactive. Contact Admin.", message = "Account is inactive. Contact Admin." });
         }
 
         var newJwt = await GenerateJwtTokenAsync(user);
@@ -174,7 +191,26 @@ public class AuthController : ControllerBase
 
         SetRefreshTokenCookie(newRefreshToken);
 
-        return Ok(new { token = newJwt });
+        return Ok(new { token = newJwt, refreshToken = newRefreshToken });
+    }
+
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout([FromBody] RefreshTokenModel? model)
+    {
+        var refreshToken = model?.RefreshToken ?? Request.Cookies["refreshToken"];
+        if (!string.IsNullOrEmpty(refreshToken))
+        {
+            var user = _context.Users.FirstOrDefault(u => u.RefreshToken == refreshToken);
+            if (user != null)
+            {
+                user.RefreshToken = null;
+                user.RefreshTokenExpiryTime = null;
+                await _userManager.UpdateAsync(user);
+            }
+        }
+
+        Response.Cookies.Delete("refreshToken");
+        return Ok(new { success = true });
     }
 
     [Authorize]
@@ -314,4 +350,9 @@ public class LoginModel
 {
     public string MobileNumber { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
+}
+
+public class RefreshTokenModel
+{
+    public string? RefreshToken { get; set; }
 }

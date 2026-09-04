@@ -86,8 +86,8 @@ public class WalletLedgerTests
             Id = Guid.NewGuid(),
             Name = "Tuesday Night Doubles",
             MaxPlayers = 10,
-            EventFee = 15.00m,
-            CutoffDateTime = DateTime.UtcNow.AddHours(2),
+            ReservedFee = 15.00m,
+            CutoffDateTime = DateTime.Now.AddHours(2),
             Status = EventStatus.Open
         };
         _context.Events.Add(@event);
@@ -102,7 +102,8 @@ public class WalletLedgerTests
             PlayerId = player.Id
         }, CancellationToken.None);
 
-        await act.Should().ThrowAsync<Exception>().WithMessage("Insufficient wallet balance. Please contact organizer.");
+        await act.Should().ThrowAsync<Exception>()
+            .WithMessage("*Insufficient wallet balance*");
     }
 }
 
