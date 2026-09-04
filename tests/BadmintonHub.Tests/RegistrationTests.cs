@@ -141,9 +141,76 @@ public class RegistrationTests
         // Player 2 should be promoted
         var player2Reg = await _context.Registrations.FirstOrDefaultAsync(r => r.PlayerId == player2.Id && !r.IsCancelled);
         player2Reg.Should().NotBeNull();
-        player2.WalletBalance.Should().Be(0.00m); // Fee deducted
+        player2.WalletBalance.Should().Be(10.00m); // Fee was paid once at registration, not double-debited on promotion
 
         var wl = await _context.Waitlists.FirstOrDefaultAsync(w => w.PlayerId == player2.Id);
         wl!.IsPromoted.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task CancelRegistration_MultiSlot_WithWaitlist_ShouldRefundAllAndPromoteCorrectly()
+    {
+        // Arrange
+        var @event = new Event
+        {
+            Id = Guid.NewGuid(),
+            Name = "Sunday Smash",
+            MaxPlayers = 4,
+            ReservedFee = 10.00m,
+            CutoffDateTime = DateTime.Now.AddHours(5),
+            Status = EventStatus.Open
+        };
+        _context.Events.Add(@event);
+
+        var player1 = new ApplicationUser
+        {
+            Id = Guid.NewGuid(),
+            UserName = "p1",
+            FullName = "Player One",
+            Role = UserRole.Player,
+            Status = UserStatus.Active,
+            WalletBalance = 50.00m
+        };
+        var player2 = new ApplicationUser
+        {
+            Id = Guid.NewGuid(),
+            UserName = "p2",
+            FullName = "Player Two",
+            Role = UserRole.Player,
+            Status = UserStatus.Active,
+            WalletBalance = 20.00m
+        };
+        _context.Users.AddRange(player1, player2);
+        await _context.SaveChangesAsync();
+
+        var regHandler = new RegisterPlayerCommandHandler(_context, _dateTime);
+        var cancelHandler = new CancelRegistrationCommandHandler(_context, _dateTime);
+
+        // Player 1 registers with 4 guests (5 total participants: 4 registered, 1 waitlisted)
+        await regHandler.Handle(new RegisterPlayerCommand { EventId = @event.Id, PlayerId = player1.Id, GuestCount = 4 }, CancellationToken.None);
+
+        // Player 2 registers with 1 guest (2 total participants: both waitlisted)
+        await regHandler.Handle(new RegisterPlayerCommand { EventId = @event.Id, PlayerId = player2.Id, GuestCount = 1 }, CancellationToken.None);
+
+        @event.RegisteredPlayersCount.Should().Be(4);
+        @event.WaitlistedPlayersCount.Should().Be(3); // P1 guest 4, P2, P2 guest 1
+        player1.WalletBalance.Should().Be(0.00m);
+        player2.WalletBalance.Should().Be(0.00m);
+
+        // Act - Player 1 cancels slot
+        var cancelResult = await cancelHandler.Handle(new CancelRegistrationCommand(@event.Id, player1.Id), CancellationToken.None);
+
+        // Assert
+        cancelResult.Success.Should().BeTrue();
+        player1.WalletBalance.Should().Be(50.00m); // All 5 slots refunded
+
+        // Player 2 and Player 2 guest 1 should be promoted to registered
+        @event.RegisteredPlayersCount.Should().Be(2);
+        @event.WaitlistedPlayersCount.Should().Be(0);
+        @event.Status.Should().Be(EventStatus.Open);
+
+        var p2Regs = await _context.Registrations.Where(r => r.PlayerId == player2.Id && !r.IsCancelled).ToListAsync();
+        p2Regs.Count.Should().Be(2);
+    }
 }
+

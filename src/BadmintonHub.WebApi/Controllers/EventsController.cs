@@ -593,7 +593,8 @@ public class EventsController : ControllerBase
         }
         catch (Exception ex)
         {
-            return BadRequest(new { error = ex.Message });
+            var msg = ex.InnerException != null ? $"{ex.Message} -> {ex.InnerException.Message}" : ex.Message;
+            return BadRequest(new { error = msg });
         }
     }
 
