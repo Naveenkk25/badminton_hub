@@ -121,7 +121,7 @@ export default function DashboardPage() {
     .filter((e: any) => e.status !== "Completed" && e.status !== "Cancelled")
     .sort((a: any, b: any) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime());
 
-  const totalPlatformRevenue = events.reduce(
+  const totalUpcomingRevenue = allUpcomingEvents.reduce(
     (sum: number, e: any) => sum + (e.registeredPlayersCount || 0) * (e.reservedFee || 0),
     0
   );
@@ -130,16 +130,17 @@ export default function DashboardPage() {
   // ORGANIZER COMPUTED DATA
   // -------------------------------------------------------------
   const orgEvents = events.filter((e: any) => e.organizerId === orgData?.id);
-  const upcomingOrgEvents = orgEvents
-    .filter((e: any) => e.status !== "Completed" && e.status !== "Cancelled")
+  const nonCancelledOrgEvents = orgEvents.filter((e: any) => e.status !== "Cancelled");
+  const upcomingOrgEvents = nonCancelledOrgEvents
+    .filter((e: any) => e.status !== "Completed")
     .sort((a: any, b: any) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime());
 
-  const orgTotalRegistrations = orgEvents.reduce(
+  const orgTotalRegistrations = nonCancelledOrgEvents.reduce(
     (sum: number, e: any) => sum + (e.registeredPlayersCount || 0),
     0
   );
 
-  const orgTotalRevenue = orgEvents.reduce(
+  const orgTotalRevenue = nonCancelledOrgEvents.reduce(
     (sum: number, e: any) => sum + (e.registeredPlayersCount || 0) * (e.reservedFee || 0),
     0
   );
@@ -205,8 +206,8 @@ export default function DashboardPage() {
             <StatCard
               title="Upcoming Events"
               value={allUpcomingEvents.length}
-              badge={`${formatCurrency(totalPlatformRevenue)} Revenue`}
-              subtext="Across entire platform"
+              badge={`${formatCurrency(totalUpcomingRevenue)} Revenue`}
+              subtext="Across upcoming platform events"
               icon={<CalendarDays className="h-5 w-5 text-shuttlecock-gold" />}
               variants={itemVariants}
             />
