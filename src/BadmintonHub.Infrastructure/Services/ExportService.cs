@@ -5,6 +5,9 @@ using System.Reflection;
 using System.Text;
 using BadmintonHub.Application.Common.Interfaces;
 using BadmintonHub.Application.DTOs;
+using QuestPDF.Fluent;
+using QuestPDF.Helpers;
+using QuestPDF.Infrastructure;
 
 namespace BadmintonHub.Infrastructure.Services;
 
@@ -157,6 +160,89 @@ public class ExportService : IExportService
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
         return stream.ToArray();
+    }
+
+    public byte[] ExportEventFinancialSummaryToPdf(string monthTitle, int year, IEnumerable<EventFinancialSummaryItemDto> events, EventFinancialSummaryItemDto total)
+    {
+        QuestPDF.Settings.License = LicenseType.Community;
+
+        var document = Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4.Landscape());
+                page.Margin(1.5f, Unit.Centimetre);
+                page.PageColor(Colors.White);
+                page.DefaultTextStyle(x => x.FontSize(10));
+
+                page.Header().Column(col =>
+                {
+                    col.Item().Row(row =>
+                    {
+                        row.RelativeItem().Column(titleCol =>
+                        {
+                            titleCol.Item().Text("Badminton Hub").FontSize(18).Bold().FontColor("#1E40AF");
+                            titleCol.Item().Text($"Event Financial Summary — {monthTitle} {year}").FontSize(13).SemiBold().FontColor("#475569");
+                        });
+                        row.ConstantItem(180).AlignRight().Text($"Generated: {DateTime.Now:yyyy-MM-dd HH:mm}").FontSize(9).FontColor(Colors.Grey.Medium);
+                    });
+                    col.Item().PaddingTop(8).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
+                });
+
+                page.Content().PaddingTop(12).Table(table =>
+                {
+                    table.ColumnsDefinition(columns =>
+                    {
+                        columns.RelativeColumn(3f);    // Event Name
+                        columns.RelativeColumn(1.4f);  // Event Date
+                        columns.RelativeColumn(1.6f);  // Total Registrations
+                        columns.RelativeColumn(2f);    // Amount Collected
+                        columns.RelativeColumn(2f);    // Total Refunds
+                        columns.RelativeColumn(2f);    // Net Amount
+                    });
+
+                    // Header Row
+                    table.Header(header =>
+                    {
+                        header.Cell().Background("#F1F5F9").Padding(6).Text("Event Name").Bold().FontColor("#334155");
+                        header.Cell().Background("#F1F5F9").Padding(6).AlignCenter().Text("Event Date").Bold().FontColor("#334155");
+                        header.Cell().Background("#F1F5F9").Padding(6).AlignRight().Text("Total Registrations").Bold().FontColor("#334155");
+                        header.Cell().Background("#F1F5F9").Padding(6).AlignRight().Text("Total Amount Collected").Bold().FontColor("#334155");
+                        header.Cell().Background("#F1F5F9").Padding(6).AlignRight().Text("Total Refunds").Bold().FontColor("#334155");
+                        header.Cell().Background("#F1F5F9").Padding(6).AlignRight().Text("Net Amount").Bold().FontColor("#334155");
+                    });
+
+                    // Data Rows
+                    foreach (var item in events)
+                    {
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(6).Text(item.EventName);
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(6).AlignCenter().Text(item.EventDate.ToString("MMM d"));
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(6).AlignRight().Text(item.TotalRegistrations.ToString());
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(6).AlignRight().Text($"${item.TotalAmountCollected:N2}");
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(6).AlignRight().Text($"${item.TotalRefunds:N2}");
+                        table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten3).Padding(6).AlignRight().Text($"${item.NetAmount:N2}");
+                    }
+
+                    // Total Row
+                    table.Cell().Background("#F8FAFC").BorderTop(1.5f).BorderColor("#CBD5E1").Padding(7).Text(total.EventName).Bold();
+                    table.Cell().Background("#F8FAFC").BorderTop(1.5f).BorderColor("#CBD5E1").Padding(7).Text("");
+                    table.Cell().Background("#F8FAFC").BorderTop(1.5f).BorderColor("#CBD5E1").Padding(7).AlignRight().Text(total.TotalRegistrations.ToString()).Bold();
+                    table.Cell().Background("#F8FAFC").BorderTop(1.5f).BorderColor("#CBD5E1").Padding(7).AlignRight().Text($"${total.TotalAmountCollected:N2}").Bold();
+                    table.Cell().Background("#F8FAFC").BorderTop(1.5f).BorderColor("#CBD5E1").Padding(7).AlignRight().Text($"${total.TotalRefunds:N2}").Bold();
+                    table.Cell().Background("#F8FAFC").BorderTop(1.5f).BorderColor("#CBD5E1").Padding(7).AlignRight().Text($"${total.NetAmount:N2}").Bold();
+                });
+
+                page.Footer().AlignRight().Text(x =>
+                {
+                    x.Span("Page ");
+                    x.CurrentPageNumber();
+                    x.Span(" of ");
+                    x.TotalPages();
+                });
+            });
+        });
+
+        return document.GeneratePdf();
     }
 
     private static string EscapeCsvField(string field)

@@ -27,14 +27,17 @@ public class ReportsController : ApiControllerBase
     }
 
     [HttpGet("event-financial-summary")]
-    public async Task<IActionResult> GetEventFinancialSummary([FromQuery] int year, [FromQuery] int month)
+    public async Task<IActionResult> GetEventFinancialSummary(
+        [FromQuery] int year, 
+        [FromQuery] int month, 
+        [FromQuery] string format = "excel")
     {
         if (year < 2000 || year > 2100 || month < 1 || month > 12)
         {
             return BadRequest(new { message = "Invalid year or month specified." });
         }
 
-        var query = new GetEventFinancialSummaryQuery(year, month);
+        var query = new GetEventFinancialSummaryQuery(year, month, format);
         var result = await Mediator.Send(query);
 
         if (result == null)

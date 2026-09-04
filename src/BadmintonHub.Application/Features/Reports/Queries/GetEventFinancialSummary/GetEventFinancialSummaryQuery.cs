@@ -13,7 +13,7 @@ using BadmintonHub.Domain.Enums;
 
 namespace BadmintonHub.Application.Features.Reports.Queries.GetEventFinancialSummary;
 
-public record GetEventFinancialSummaryQuery(int Year, int Month) : IRequest<ReportExportVm?>;
+public record GetEventFinancialSummaryQuery(int Year, int Month, string Format = "excel") : IRequest<ReportExportVm?>;
 
 public class GetEventFinancialSummaryQueryHandler : IRequestHandler<GetEventFinancialSummaryQuery, ReportExportVm?>
 {
@@ -108,13 +108,28 @@ public class GetEventFinancialSummaryQueryHandler : IRequestHandler<GetEventFina
             NetAmount = items.Sum(i => i.NetAmount)
         };
 
-        var fileContent = _exportService.ExportEventFinancialSummaryToExcel(monthName, items, total);
+        byte[] fileContent;
+        string contentType;
+        string fileName;
+
+        if (string.Equals(request.Format, "pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            fileContent = _exportService.ExportEventFinancialSummaryToPdf(monthName, request.Year, items, total);
+            contentType = "application/pdf";
+            fileName = $"Event_Financial_Summary_{monthName}_{request.Year}.pdf";
+        }
+        else
+        {
+            fileContent = _exportService.ExportEventFinancialSummaryToExcel(monthName, items, total);
+            contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            fileName = $"Event_Financial_Summary_{monthName}_{request.Year}.xlsx";
+        }
 
         return new ReportExportVm
         {
             FileContent = fileContent,
-            ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            FileName = $"Event_Financial_Summary_{monthName}_{request.Year}.xlsx"
+            ContentType = contentType,
+            FileName = fileName
         };
     }
 }
