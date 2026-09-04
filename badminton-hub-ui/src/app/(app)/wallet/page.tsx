@@ -9,7 +9,7 @@ import { ArrowUpRight, ArrowDownRight, History, Wallet as WalletIcon, DollarSign
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, formatTime } from "@/lib/constants";
+import { formatCurrency } from "@/lib/constants";
 import { format } from "date-fns";
 
 export default function WalletPage() {
@@ -112,7 +112,7 @@ export default function WalletPage() {
                           <div>
                             <p className="font-semibold text-sm">{tx.description}</p>
                             <p className="text-xs text-muted-foreground font-medium">
-                              {format(new Date(tx.timestamp), "MMM d, yyyy")} • {formatTime(tx.timestamp.split("T")[1].substring(0,5) + ":00")}
+                              {format(new Date(tx.timestamp), "MMM d, yyyy • h:mm a")}
                             </p>
                           </div>
                         </div>
@@ -160,13 +160,9 @@ export default function WalletPage() {
                 
                 <div className="space-y-4">
                   <div className="flex justify-between items-center py-2 border-b border-border/50">
-                    <span className="text-muted-foreground text-sm">Transaction ID</span>
-                    <span className="font-mono text-xs">{selectedTx.id}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-border/50">
                     <span className="text-muted-foreground text-sm">Date & Time</span>
                     <span className="font-medium text-sm">
-                      {format(new Date(selectedTx.timestamp), "MMM d, yyyy")} at {formatTime(selectedTx.timestamp.split("T")[1].substring(0,5) + ":00")}
+                      {format(new Date(selectedTx.timestamp), "MMM d, yyyy 'at' h:mm a")}
                     </span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-border/50">
