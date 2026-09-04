@@ -192,43 +192,6 @@ export default function ReportsPage() {
                   </>
                 )}
               </Button>
-
-              {/* Quick direct alternative button */}
-              {selectedFormat === "excel" ? (
-                <Button
-                  onClick={() => handleDownloadEventFinancialSummary("pdf")}
-                  disabled={!!exportingFormat}
-                  variant="outline"
-                  className="font-medium h-10 px-4 border-border/70 hover:bg-muted/40"
-                >
-                  {exportingFormat === "pdf" ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Generating...
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="h-4 w-4 mr-2 text-match-red" /> Download PDF
-                    </>
-                  )}
-                </Button>
-              ) : (
-                <Button
-                  onClick={() => handleDownloadEventFinancialSummary("excel")}
-                  disabled={!!exportingFormat}
-                  variant="outline"
-                  className="font-medium h-10 px-4 border-border/70 hover:bg-muted/40"
-                >
-                  {exportingFormat === "excel" ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Generating...
-                    </>
-                  ) : (
-                    <>
-                      <FileSpreadsheet className="h-4 w-4 mr-2 text-court-green" /> Download Excel
-                    </>
-                  )}
-                </Button>
-              )}
             </div>
           </div>
         </CardContent>
